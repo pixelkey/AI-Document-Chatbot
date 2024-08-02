@@ -68,6 +68,8 @@ python scripts/chatbot.py
 ```
 
 This will launch the Gradio interface for the chatbot. Open the provided local URL in your web browser to interact with the chatbot.
+You can find the local http address in the logs. 
+Find this line: Running on local URL:  http://127.0.0.1:7860
 
 ## Usage
 - **Input Text:** Type your query in the input text box and click "Submit" to get a response from the chatbot. The response will be based on the similarity search of the provided documents.
