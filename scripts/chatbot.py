@@ -24,7 +24,7 @@ DOCSTORE_PATH = os.getenv("DOCSTORE_PATH", "../embeddings/docstore.pkl")
 INGEST_PATH = os.getenv("INGEST_PATH", "../ingest")
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "Please only provide responses based on the information provided. If it is not available, please let me know.")
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.1))
-TOP_SIMILARITY_RESULTS = int(os.getenv("TOP_SIMILARITY_RESULTS", 2))
+TOP_SIMILARITY_RESULTS = int(os.getenv("TOP_SIMILARITY_RESULTS", 3))
 
 # Function to normalize text
 def normalize_text(text):
