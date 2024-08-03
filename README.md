@@ -91,4 +91,4 @@ The `.env` file contains several configuration options:
 - **TOP_SIMILARITY_RESULTS:** The number of top similar results to be considered for generating responses.
 
 ## License
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for more details.
