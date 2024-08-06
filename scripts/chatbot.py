@@ -13,7 +13,7 @@ from langchain_openai import OpenAIEmbeddings
 import tiktoken
 import logging
 import nltk
-from nltk.tokenize import sent_tokenize
+from nltk.tokenize import sent_tokenize, blankline_tokenize
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -41,7 +41,7 @@ SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.25))  # Lowered
 TOP_SIMILARITY_RESULTS = int(os.getenv("TOP_SIMILARITY_RESULTS", 3))  # Ensure top results are correctly set
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", 128000))
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 512))  # Chunk size in tokens
+CHUNK_SIZE_MAX = int(os.getenv("CHUNK_SIZE_MAX", 512))  # Chunk size in tokens
 
 # Print environment variables
 logging.info(f"SIMILARITY_THRESHOLD: {SIMILARITY_THRESHOLD}")
@@ -54,30 +54,53 @@ encoding = tiktoken.get_encoding("cl100k_base")
 def normalize_text(text):
     return text.strip().lower()
 
-# Split text into chunks based on sentences
-def chunk_text_by_sentences(text, chunk_size):
-    sentences = sent_tokenize(text)
+# Split text into chunks based on paragraphs and sentences
+def chunk_text_hybrid(text, chunk_size_max):
+    paragraphs = blankline_tokenize(text)
     chunks = []
     current_chunk = []
     current_chunk_size = 0
-
-    for sentence in sentences:
-        sentence_tokens = encoding.encode(sentence)
-        sentence_size = len(sentence_tokens)
-
-        if current_chunk_size + sentence_size > chunk_size:
-            # If adding the current sentence exceeds the chunk size, create a new chunk
-            chunks.append(" ".join(current_chunk))
-            current_chunk = [sentence]
-            current_chunk_size = sentence_size
+    
+    for paragraph in paragraphs:
+        paragraph_tokens = encoding.encode(paragraph)
+        paragraph_size = len(paragraph_tokens)
+        
+        if current_chunk_size + paragraph_size > chunk_size_max:
+            # If adding the current paragraph exceeds the chunk size, finalize the current chunk
+            if current_chunk:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = []
+                current_chunk_size = 0
+            
+            if paragraph_size > chunk_size_max:
+                # If the paragraph itself is too large, split by sentences
+                sentences = sent_tokenize(paragraph)
+                for sentence in sentences:
+                    sentence_tokens = encoding.encode(sentence)
+                    sentence_size = len(sentence_tokens)
+                    
+                    if current_chunk_size + sentence_size > chunk_size_max:
+                        # If adding the current sentence exceeds the chunk size, create a new chunk
+                        if current_chunk:
+                            chunks.append(" ".join(current_chunk))
+                            current_chunk = []
+                            current_chunk_size = 0
+                        
+                        current_chunk.append(sentence)
+                        current_chunk_size = sentence_size
+                    else:
+                        current_chunk.append(sentence)
+                        current_chunk_size += sentence_size
+            else:
+                current_chunk.append(paragraph)
+                current_chunk_size = paragraph_size
         else:
-            # Otherwise, add the sentence to the current chunk
-            current_chunk.append(sentence)
-            current_chunk_size += sentence_size
-
+            current_chunk.append(paragraph)
+            current_chunk_size += paragraph_size
+    
     if current_chunk:
         chunks.append(" ".join(current_chunk))
-
+    
     return chunks
 
 # Load documents from a folder and chunk them
@@ -89,7 +112,7 @@ def load_documents_from_folder(folder_path):
                 file_path = os.path.join(folder_path, filename)
                 with open(file_path, "r") as file:
                     content = file.read()
-                    chunks = chunk_text_by_sentences(content, CHUNK_SIZE)
+                    chunks = chunk_text_hybrid(content, CHUNK_SIZE_MAX)
                     for chunk_idx, chunk in enumerate(chunks):
                         documents.append({
                             "id": f"{idx}-{chunk_idx}",
@@ -301,7 +324,8 @@ def chatbot_response(input_text):
     combined_input += f"\n\nUser Prompt:\n{input_text}"
 
     logging.info(f"Prepared combined input for LLM")
-    # Log the combined input for debugging
+
+    # log the combined input for debugging
     logging.info(f"Combined input: {combined_input}")
 
     # Create the list of messages for the Chat API
@@ -330,7 +354,7 @@ def chatbot_response(input_text):
 
     # Construct reference list
     references = "References:\n" + "\n".join([
-        f"Chunk {doc.metadata['id']}: {doc.metadata['filename']}"
+        f"Document {doc.metadata['id']}: {doc.metadata['filename']}"
         for doc in filtered_docs
     ])
 
