@@ -16,7 +16,7 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Explicitly delete the OPENAI_API_KEY from the OS environment in case it is set to avoid using the wrong key.
+# Delete the OPENAI_API_KEY from the OS environment in case it is set to avoid using the wrong key.
 if "OPENAI_API_KEY" in os.environ:
     del os.environ["OPENAI_API_KEY"]
 
@@ -25,8 +25,8 @@ load_dotenv()
 
 # Configurable variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your-api-key-here")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-large")  # Updated embedding model
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 1536))  # Ensure this is appropriate for your model
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")  # Updated embedding model
+EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 1536))  # Ensure this matches the actual embedding dimension
 FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "../embeddings/faiss_index.bin")
 METADATA_PATH = os.getenv("METADATA_PATH", "../embeddings/metadata.pkl")
 DOCSTORE_PATH = os.getenv("DOCSTORE_PATH", "../embeddings/docstore.pkl")
@@ -36,6 +36,7 @@ SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.25))  # Lowered
 TOP_SIMILARITY_RESULTS = int(os.getenv("TOP_SIMILARITY_RESULTS", 3))  # Ensure top results are correctly set
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", 128000))
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 512))  # Chunk size in tokens
 
 # Print environment variables
 logging.info(f"SIMILARITY_THRESHOLD: {SIMILARITY_THRESHOLD}")
@@ -48,7 +49,13 @@ encoding = tiktoken.get_encoding("cl100k_base")
 def normalize_text(text):
     return text.strip().lower()
 
-# Load documents from a folder
+# Split text into chunks
+def chunk_text(text, chunk_size):
+    tokens = encoding.encode(text)
+    chunks = [encoding.decode(tokens[i:i+chunk_size]) for i in range(0, len(tokens), chunk_size)]
+    return chunks
+
+# Load documents from a folder and chunk them
 def load_documents_from_folder(folder_path):
     documents = []
     try:
@@ -57,8 +64,14 @@ def load_documents_from_folder(folder_path):
                 file_path = os.path.join(folder_path, filename)
                 with open(file_path, "r") as file:
                     content = file.read()
-                    documents.append({"id": idx, "content": content, "filename": filename})
-                    logging.info(f"Loaded document {filename}")
+                    chunks = chunk_text(content, CHUNK_SIZE)
+                    for chunk_idx, chunk in enumerate(chunks):
+                        documents.append({
+                            "id": f"{idx}-{chunk_idx}",
+                            "content": chunk,
+                            "filename": filename
+                        })
+                    logging.info(f"Loaded and chunked document {filename} into {len(chunks)} chunks")
     except FileNotFoundError:
         logging.error(f"Folder not found: {folder_path}")
     return documents
@@ -117,7 +130,21 @@ if loaded_faiss_index and loaded_metadata and loaded_docstore:
     logging.info("Loaded vector store from saved files.")
 else:
     # Create a new FAISS index and docstore if loading failed
-    index = faiss.IndexFlatL2(EMBEDDING_DIM)
+    documents = load_documents_from_folder(ingest_path)
+
+    if not documents:
+        raise ValueError(f"No documents found in the folder: {ingest_path}")
+
+    # Log the number of documents loaded
+    logging.info(f"Total chunks loaded: {len(documents)}")
+
+    # Dynamic number of clusters based on the number of documents
+    num_documents = len(documents)
+    num_clusters = max(10, num_documents // 2)  # At least 10 clusters or half the number of documents
+
+    quantizer = faiss.IndexFlatIP(EMBEDDING_DIM)  # Inner product (cosine similarity)
+    index = faiss.IndexIVFFlat(quantizer, EMBEDDING_DIM, num_clusters, faiss.METRIC_INNER_PRODUCT)
+    index.nprobe = 10  # Number of clusters to search. Adjust based on performance needs.
     docstore = InMemoryDocstore()
     index_to_docstore_id = {}  # Simple index-to-docstore mapping
     vector_store = FAISS(
@@ -127,36 +154,57 @@ else:
         index_to_docstore_id=index_to_docstore_id
     )
 
-    # Load and process documents from 'ingest' folder
-    documents = load_documents_from_folder(ingest_path)
-
-    if not documents:
-        raise ValueError(f"No documents found in the folder: {ingest_path}")
-
-    # Log the number of documents loaded
-    logging.info(f"Total documents loaded: {len(documents)}")
-
-    # Normalize and convert documents to vectors, then add to vector store
+    # Collect vectors for training
+    training_vectors = []
     for doc in documents:
         normalized_doc = normalize_text(doc["content"])
         vectors = embeddings.embed_query(normalized_doc)
-        logging.info(f"Processed document {doc['filename']} for embedding with vector: {vectors[:5]}...")  # Show the first 5 elements of the vector for brevity
-        doc_id = int(doc["id"])  # Ensure the ID is an integer
+        
+        # Debugging: Validate embedding dimensions
+        logging.info(f"Embedding dimension: {len(vectors)}, Config EMBEDDING_DIM: {EMBEDDING_DIM}")
+        assert len(vectors) == EMBEDDING_DIM, f"Embedding dimension {len(vectors)} does not match expected {EMBEDDING_DIM}"
+        
+        training_vectors.append(vectors)
+
+    # Convert to numpy array
+    training_vectors = np.array(training_vectors, dtype='float32')
+
+    # Train the FAISS index with collected vectors if using IVFFlat
+    if not vector_store.index.is_trained:
+        vector_store.index.train(training_vectors)
+        logging.info(f"FAISS index trained with {num_clusters} clusters.")
+
+    # Add vectors to the FAISS index after training
+    for idx, doc in enumerate(documents):
+        normalized_doc = normalize_text(doc["content"])
+        vectors = np.array(embeddings.embed_query(normalized_doc), dtype='float32')
+
+        logging.info(f"Processed document chunk for embedding with vector: {vectors[:5]}...")  # Show the first 5 elements of the vector for brevity
+        doc_id = idx  # Use integer ID for chunked documents
         # Add document to vector store
         document = Document(page_content=normalized_doc, metadata={"id": doc_id, "filename": doc["filename"]})
         vector_store.add_texts([normalized_doc], metadatas=[document.metadata], ids=[doc_id])
         docstore._dict[doc_id] = document  # Directly add Document to the in-memory dictionary
-        index_to_docstore_id[doc_id] = doc_id  # Map index to docstore ID
-        logging.info(f"Added document {doc_id} to vector store with normalized content.")
-
+        index_to_docstore_id[doc_id] = doc_id  # Use integer ID for the docstore ID
+        logging.info(f"Added document chunk {doc_id} to vector store with normalized content.")
+    
     # Save FAISS index, metadata, and docstore to disk
     save_faiss_index_metadata_and_docstore(vector_store.index, index_to_docstore_id, docstore, faiss_index_path, metadata_path, docstore_path)
+
+    # Verify mapping after saving
+    logging.info(f"Document ID to Docstore Mapping: {index_to_docstore_id}")
 
 # Search with scores
 def similarity_search_with_score(query, k=100):
     # Embed the query
-    query_vector = np.array(embeddings.embed_query(query)).reshape(1, -1)
+    query_vector = np.array(embeddings.embed_query(query), dtype='float32').reshape(1, -1)
     logging.info(f"Processed query for embedding with vector: {query_vector[:5]}...")  # Show the first 5 elements of the vector for brevity
+
+    # Ensure query vector dimensionality matches the FAISS index dimensionality
+    assert query_vector.shape[1] == EMBEDDING_DIM, f"Query vector dimension {query_vector.shape[1]} does not match index dimension {EMBEDDING_DIM}"
+
+    # Normalize query vector for cosine similarity
+    faiss.normalize_L2(query_vector)
 
     # Search the FAISS index
     D, I = vector_store.index.search(query_vector, k)
@@ -165,11 +213,16 @@ def similarity_search_with_score(query, k=100):
     for i, score in zip(I[0], D[0]):
         if i != -1:  # Ensure valid index
             try:
-                doc = vector_store.docstore.search(vector_store.index_to_docstore_id[i])
+                doc_id = vector_store.index_to_docstore_id.get(i, None)  # Use integer ID
+                if doc_id is None:
+                    raise KeyError(f"Document ID {i} not found in mapping.")
+                doc = vector_store.docstore.search(doc_id)
                 results.append((doc, score))
-                logging.info(f"Matched document {doc.metadata['id']} with score {score} and content: {doc.page_content[:200]}...")  # Show first 200 characters of content for brevity
+                logging.info(f"Matched document {doc_id} with score {score} and content: {doc.page_content[:200]}...")  # Show first 200 characters of content for brevity
             except KeyError as e:
-                logging.error(f"KeyError finding document: {e}")
+                logging.error(f"KeyError finding document id {i}: {e}")
+                if doc_id not in vector_store.docstore._dict:
+                    logging.error(f"Document id {doc_id} not found in docstore._dict")
 
     # Log the results for debugging
     logging.info(f"Total documents considered: {len(results)}")
@@ -210,12 +263,12 @@ def chatbot_response(input_text):
 
     # Sort filtered results by similarity score in descending order
     unique_filtered_results.sort(key=lambda x: x[1], reverse=True)
-    filtered_docs = unique_filtered_results[:TOP_SIMILARITY_RESULTS]
-    logging.info(f"Top similarity results: {[(result[0].metadata['id'], result[1]) for result in filtered_docs]}")
+    filtered_docs = [result[0] for result in unique_filtered_results[:TOP_SIMILARITY_RESULTS]]
+    logging.info(f"Top similarity results: {[(doc.metadata['id'], score) for doc, score in unique_filtered_results[:TOP_SIMILARITY_RESULTS]]}")
 
     combined_input = f"{SYSTEM_PROMPT}\n\n" + "\n\n".join([
         f"Document {doc.metadata['id']} ({doc.metadata['filename']}):\n{doc.page_content}"
-        for doc in [result[0] for result in filtered_docs]
+        for doc in filtered_docs
     ] + [input_text])
 
     logging.info(f"Prepared combined input for LLM")
@@ -225,7 +278,7 @@ def chatbot_response(input_text):
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": input_text}
     ]
-    for doc in [result[0] for result in filtered_docs]:
+    for doc in filtered_docs:
         messages.append({"role": "user", "content": doc.page_content})
 
     try:
@@ -247,7 +300,7 @@ def chatbot_response(input_text):
     # Construct reference list
     references = "References:\n" + "\n".join([
         f"Document {doc.metadata['id']}: {doc.metadata['filename']}"
-        for doc in [result[0] for result in filtered_docs]
+        for doc in filtered_docs
     ])
 
     # Return chat history, references, and clear input
