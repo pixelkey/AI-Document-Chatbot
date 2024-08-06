@@ -6,3 +6,4 @@ langchain-openai
 faiss-cpu
 tiktoken
 python-dotenv
+nltk

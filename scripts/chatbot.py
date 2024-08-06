@@ -12,9 +12,14 @@ from langchain_community.docstore.document import Document
 from langchain_openai import OpenAIEmbeddings
 import tiktoken
 import logging
+import nltk
+from nltk.tokenize import sent_tokenize
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
+
+# Download NLTK data for sentence tokenization
+nltk.download('punkt')
 
 # Delete the OPENAI_API_KEY from the OS environment in case it is set to avoid using the wrong key.
 if "OPENAI_API_KEY" in os.environ:
@@ -31,7 +36,7 @@ FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "../embeddings/faiss_index.bin"
 METADATA_PATH = os.getenv("METADATA_PATH", "../embeddings/metadata.pkl")
 DOCSTORE_PATH = os.getenv("DOCSTORE_PATH", "../embeddings/docstore.pkl")
 INGEST_PATH = os.getenv("INGEST_PATH", "../ingest")
-SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "Please only provide responses based on the information provided. If it is not available, please let me know.")
+SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "Please provide responses based only on the context documents provided if they are relevant to the user's prompt. If the context documents are not relevant, or if the information is not available, please let me know. Do not provide information beyond what is available in the context documents.")
 SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.25))  # Lowered threshold
 TOP_SIMILARITY_RESULTS = int(os.getenv("TOP_SIMILARITY_RESULTS", 3))  # Ensure top results are correctly set
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
@@ -49,10 +54,30 @@ encoding = tiktoken.get_encoding("cl100k_base")
 def normalize_text(text):
     return text.strip().lower()
 
-# Split text into chunks
-def chunk_text(text, chunk_size):
-    tokens = encoding.encode(text)
-    chunks = [encoding.decode(tokens[i:i+chunk_size]) for i in range(0, len(tokens), chunk_size)]
+# Split text into chunks based on sentences
+def chunk_text_by_sentences(text, chunk_size):
+    sentences = sent_tokenize(text)
+    chunks = []
+    current_chunk = []
+    current_chunk_size = 0
+
+    for sentence in sentences:
+        sentence_tokens = encoding.encode(sentence)
+        sentence_size = len(sentence_tokens)
+
+        if current_chunk_size + sentence_size > chunk_size:
+            # If adding the current sentence exceeds the chunk size, create a new chunk
+            chunks.append(" ".join(current_chunk))
+            current_chunk = [sentence]
+            current_chunk_size = sentence_size
+        else:
+            # Otherwise, add the sentence to the current chunk
+            current_chunk.append(sentence)
+            current_chunk_size += sentence_size
+
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
+
     return chunks
 
 # Load documents from a folder and chunk them
@@ -64,7 +89,7 @@ def load_documents_from_folder(folder_path):
                 file_path = os.path.join(folder_path, filename)
                 with open(file_path, "r") as file:
                     content = file.read()
-                    chunks = chunk_text(content, CHUNK_SIZE)
+                    chunks = chunk_text_by_sentences(content, CHUNK_SIZE)
                     for chunk_idx, chunk in enumerate(chunks):
                         documents.append({
                             "id": f"{idx}-{chunk_idx}",
@@ -276,6 +301,8 @@ def chatbot_response(input_text):
     combined_input += f"\n\nUser Prompt:\n{input_text}"
 
     logging.info(f"Prepared combined input for LLM")
+    # Log the combined input for debugging
+    logging.info(f"Combined input: {combined_input}")
 
     # Create the list of messages for the Chat API
     messages = [
@@ -303,7 +330,7 @@ def chatbot_response(input_text):
 
     # Construct reference list
     references = "References:\n" + "\n".join([
-        f"Document {doc.metadata['id']}: {doc.metadata['filename']}"
+        f"Chunk {doc.metadata['id']}: {doc.metadata['filename']}"
         for doc in filtered_docs
     ])
 
