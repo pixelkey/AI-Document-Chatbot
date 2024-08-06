@@ -253,33 +253,37 @@ def chatbot_response(input_text):
     ]
     logging.info(f"Filtered results by similarity threshold: {[result[1] for result in filtered_results]}")
 
-    # Remove duplicates
-    seen_ids = set()
+    # Remove duplicates by content
+    seen_contents = set()
     unique_filtered_results = []
     for result in filtered_results:
-        if result[0].metadata['id'] not in seen_ids:
+        content_hash = hash(result[0].page_content)
+        if content_hash not in seen_contents:
             unique_filtered_results.append(result)
-            seen_ids.add(result[0].metadata['id'])
+            seen_contents.add(content_hash)
 
     # Sort filtered results by similarity score in descending order
     unique_filtered_results.sort(key=lambda x: x[1], reverse=True)
     filtered_docs = [result[0] for result in unique_filtered_results[:TOP_SIMILARITY_RESULTS]]
     logging.info(f"Top similarity results: {[(doc.metadata['id'], score) for doc, score in unique_filtered_results[:TOP_SIMILARITY_RESULTS]]}")
 
-    combined_input = f"{SYSTEM_PROMPT}\n\n" + "\n\n".join([
-        f"Document {doc.metadata['id']} ({doc.metadata['filename']}):\n{doc.page_content}"
-        for doc in filtered_docs
-    ] + [input_text])
+    # Create the final combined input
+    combined_input = f"{SYSTEM_PROMPT}\n\n"
+    combined_input += "\n\n".join([
+        f"Context Document {idx+1} ({doc.metadata['filename']}):\n{doc.page_content}"
+        for idx, doc in enumerate(filtered_docs)
+    ])
+    combined_input += f"\n\nUser Prompt:\n{input_text}"
 
     logging.info(f"Prepared combined input for LLM")
 
     # Create the list of messages for the Chat API
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": input_text}
     ]
-    for doc in filtered_docs:
-        messages.append({"role": "user", "content": doc.page_content})
+    for idx, doc in enumerate(filtered_docs):
+        messages.append({"role": "user", "content": f"Context Document {idx+1} ({doc.metadata['filename']}): {doc.page_content}"})
+    messages.append({"role": "user", "content": f"User Prompt: {input_text}"})
 
     try:
         response = client.chat.completions.create(
