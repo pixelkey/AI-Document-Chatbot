@@ -178,45 +178,6 @@ def similarity_search_with_score(query, k=100):
 
     return results
 
-# Truncate text to fit within a token limit
-def truncate_text_to_tokens(text, max_tokens):
-    tokens = encoding.encode(text)
-    if (len(tokens) > max_tokens):
-        truncated_text = encoding.decode(tokens[:max_tokens])
-        logging.warning(f"Truncated text to fit within {max_tokens} tokens.")
-        return truncated_text
-    return text
-
-# Truncate documents to fit the token limit
-def truncate_documents_to_fit_token_limit(documents, input_text):
-    logging.info(f"Initial number of documents: {len(documents)}")
-
-    # Calculate the token budget for each document
-    max_tokens_per_doc = (MAX_TOKENS - len(encoding.encode(input_text)) - len(encoding.encode(SYSTEM_PROMPT))) // (len(documents) + 1)
-
-    truncated_docs = []
-    for doc in documents:
-        truncated_content = truncate_text_to_tokens(doc.page_content, max_tokens_per_doc)
-        truncated_docs.append(Document(page_content=truncated_content, metadata=doc.metadata))
-
-    while True:
-        combined_input = f"{SYSTEM_PROMPT}\n\n" + "\n\n".join([
-            f"Document {doc.metadata['id']} ({doc.metadata['filename']}):\n{doc.page_content}"
-            for doc in truncated_docs
-        ] + [input_text])
-
-        total_tokens = len(encoding.encode(combined_input))
-        logging.info(f"Token count for combined input: {total_tokens}")
-
-        if total_tokens <= MAX_TOKENS:
-            break
-
-        removed_doc = truncated_docs.pop()
-        logging.info(f"Removed document {removed_doc.metadata['id']} with length: {len(encoding.encode(removed_doc.page_content))} tokens")
-
-    logging.info(f"Final number of documents after truncation: {len(truncated_docs)}")
-    return truncated_docs
-
 # Chatbot response function with RAG
 def chatbot_response(input_text):
     # Normalize input text
@@ -252,14 +213,9 @@ def chatbot_response(input_text):
     filtered_docs = unique_filtered_results[:TOP_SIMILARITY_RESULTS]
     logging.info(f"Top similarity results: {[(result[0].metadata['id'], result[1]) for result in filtered_docs]}")
 
-    # Check if the combined input is within the token limit
-    truncated_docs = truncate_documents_to_fit_token_limit(
-        [result[0] for result in filtered_docs], input_text
-    )
-
     combined_input = f"{SYSTEM_PROMPT}\n\n" + "\n\n".join([
         f"Document {doc.metadata['id']} ({doc.metadata['filename']}):\n{doc.page_content}"
-        for doc in truncated_docs
+        for doc in [result[0] for result in filtered_docs]
     ] + [input_text])
 
     logging.info(f"Prepared combined input for LLM")
@@ -269,7 +225,7 @@ def chatbot_response(input_text):
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": input_text}
     ]
-    for doc in truncated_docs:
+    for doc in [result[0] for result in filtered_docs]:
         messages.append({"role": "user", "content": doc.page_content})
 
     try:
@@ -278,7 +234,7 @@ def chatbot_response(input_text):
             messages=messages,
             max_tokens=min(
                 MAX_TOKENS - len(encoding.encode(str(messages))), 8000
-            ) # Adjust the max tokens for completion
+            )  # Adjust the max tokens for completion
         )
         logging.info(f"Generated LLM response successfully")
     except Exception as e:
@@ -291,7 +247,7 @@ def chatbot_response(input_text):
     # Construct reference list
     references = "References:\n" + "\n".join([
         f"Document {doc.metadata['id']}: {doc.metadata['filename']}"
-        for doc in truncated_docs
+        for doc in [result[0] for result in filtered_docs]
     ])
 
     # Return chat history, references, and clear input
