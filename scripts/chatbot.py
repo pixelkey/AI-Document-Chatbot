@@ -312,7 +312,7 @@ def chatbot_response(input_text):
 
 # Clear the chat history and references
 def clear_history():
-    memory.clear()
+    memory.clear()  # Clear the conversation memory
     return "", "", ""
 
 # Create Gradio Blocks interface
