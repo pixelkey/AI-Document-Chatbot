@@ -186,9 +186,9 @@ else:
     # Log the number of documents loaded
     logging.info(f"Total chunks loaded: {len(documents)}")
 
-    # Dynamic number of clusters based on the number of documents
+    # Determine the number of clusters dynamically based on the number of documents
     num_documents = len(documents)
-    num_clusters = max(10, num_documents // 2)  # At least 10 clusters or half the number of documents
+    num_clusters = min(max(10, num_documents // 2), num_documents)  # At least 10 clusters or half the number of documents, but not more than the number of documents
 
     quantizer = faiss.IndexFlatIP(EMBEDDING_DIM)  # Inner product (cosine similarity)
     index = faiss.IndexIVFFlat(quantizer, EMBEDDING_DIM, num_clusters, faiss.METRIC_INNER_PRODUCT)
