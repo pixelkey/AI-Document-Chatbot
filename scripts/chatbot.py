@@ -30,7 +30,7 @@ load_dotenv()
 
 # Configurable variables
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your-api-key-here")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")  # Updated embedding model
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")  # Updated embedding model
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 1536))  # Ensure this matches the actual embedding dimension
 FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "../embeddings/faiss_index.bin")
 METADATA_PATH = os.getenv("METADATA_PATH", "../embeddings/metadata.pkl")
