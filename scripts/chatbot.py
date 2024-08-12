@@ -3,18 +3,24 @@
 import os
 import openai
 import gradio as gr
-import faiss
-import pickle
 import numpy as np
 from dotenv import load_dotenv
 from langchain.memory import ConversationBufferMemory
 from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.docstore.document import Document
+from langchain_community.docstore.in_memory import InMemoryDocstore  # Ensure this is imported
 from langchain_openai import OpenAIEmbeddings
 import logging
 import nltk
-from document_processing import load_documents_from_folder, normalize_text, encoding  # Import from the new module
+from document_processing import load_documents_from_folder, normalize_text, encoding
+from faiss_utils import (
+    save_faiss_index_metadata_and_docstore,
+    load_faiss_index_metadata_and_docstore,
+    train_faiss_index,
+    add_vectors_to_faiss_index,
+    similarity_search_with_score
+)
+import faiss  # Ensure faiss is imported
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -76,39 +82,6 @@ faiss_index_path = os.path.join(script_dir, FAISS_INDEX_PATH)
 metadata_path = os.path.join(script_dir, METADATA_PATH)
 docstore_path = os.path.join(script_dir, DOCSTORE_PATH)
 ingest_path = os.path.join(script_dir, INGEST_PATH)
-
-
-# Save FAISS index, metadata, and docstore to disk
-def save_faiss_index_metadata_and_docstore(
-    faiss_index, metadata, docstore, faiss_index_path, metadata_path, docstore_path
-):
-    faiss.write_index(faiss_index, faiss_index_path)
-    with open(metadata_path, "wb") as f:
-        pickle.dump(metadata, f)
-    with open(docstore_path, "wb") as f:
-        pickle.dump(docstore._dict, f)
-    logging.info("Saved FAISS index, metadata, and docstore to disk.")
-
-
-# Load FAISS index, metadata, and docstore from disk
-def load_faiss_index_metadata_and_docstore(
-    faiss_index_path, metadata_path, docstore_path
-):
-    if (
-        os.path.exists(faiss_index_path)
-        and os.path.exists(metadata_path)
-        and os.path.exists(docstore_path)
-    ):
-        faiss_index = faiss.read_index(faiss_index_path)
-        with open(metadata_path, "rb") as f:
-            metadata = pickle.load(f)
-        with open(docstore_path, "rb") as f:
-            docstore_data = pickle.load(f)
-            docstore = InMemoryDocstore(docstore_data)
-        logging.info("Loaded FAISS index, metadata, and docstore from disk.")
-        return faiss_index, metadata, docstore
-    return None, None, None
-
 
 # Load previous FAISS index, metadata, and docstore if they exist
 loaded_faiss_index, loaded_metadata, loaded_docstore = (
@@ -178,35 +151,11 @@ else:
     # Convert to numpy array
     training_vectors = np.array(training_vectors, dtype="float32")
 
-    # Train the FAISS index with collected vectors if using IVFFlat
-    if not vector_store.index.is_trained:
-        vector_store.index.train(training_vectors)
-        logging.info(f"FAISS index trained with {num_clusters} clusters.")
+    # Train the FAISS index
+    train_faiss_index(vector_store, training_vectors, num_clusters)
 
-    # Add vectors to the FAISS index after training
-    for idx, doc in enumerate(documents):
-        normalized_doc = normalize_text(doc["content"])
-        vectors = np.array(embeddings.embed_query(normalized_doc), dtype="float32")
-
-        logging.info(
-            f"Processed document chunk for embedding with vector: {vectors[:5]}..."
-        )  # Show the first 5 elements of the vector for brevity
-        doc_id = idx  # Use integer ID for chunked documents
-        # Add document to vector store
-        document = Document(
-            page_content=normalized_doc,
-            metadata={"id": doc_id, "filename": doc["filename"]},
-        )
-        vector_store.add_texts(
-            [normalized_doc], metadatas=[document.metadata], ids=[doc_id]
-        )
-        docstore._dict[doc_id] = (
-            document  # Directly add Document to the in-memory dictionary
-        )
-        index_to_docstore_id[doc_id] = doc_id  # Use integer ID for the docstore ID
-        logging.info(
-            f"Added document chunk {doc_id} to vector store with normalized content."
-        )
+    # Add vectors to the FAISS index
+    add_vectors_to_faiss_index(documents, vector_store, embeddings, normalize_text)
 
     # Save FAISS index, metadata, and docstore to disk
     save_faiss_index_metadata_and_docstore(
@@ -222,54 +171,6 @@ else:
     logging.info(f"Document ID to Docstore Mapping: {index_to_docstore_id}")
 
 
-# Search with scores
-def similarity_search_with_score(query, k=100):
-    # Embed the query
-    query_vector = np.array(embeddings.embed_query(query), dtype="float32").reshape(
-        1, -1
-    )
-    logging.info(
-        f"Processed query for embedding with vector: {query_vector[:5]}..."
-    )  # Show the first 5 elements of the vector for brevity
-
-    # Ensure query vector dimensionality matches the FAISS index dimensionality
-    assert (
-        query_vector.shape[1] == EMBEDDING_DIM
-    ), f"Query vector dimension {query_vector.shape[1]} does not match index dimension {EMBEDDING_DIM}"
-
-    # Normalize query vector for cosine similarity
-    faiss.normalize_L2(query_vector)
-
-    # Search the FAISS index
-    D, I = vector_store.index.search(query_vector, k)
-
-    results = []
-    for i, score in zip(I[0], D[0]):
-        if i != -1:  # Ensure valid index
-            try:
-                doc_id = vector_store.index_to_docstore_id.get(
-                    i, None
-                )  # Use integer ID
-                if doc_id is None:
-                    raise KeyError(f"Document ID {i} not found in mapping.")
-                doc = vector_store.docstore.search(doc_id)
-                results.append((doc, score))
-                logging.info(
-                    f"Matched document {doc_id} with score {score} and content: {doc.page_content[:200]}..."
-                )  # Show first 200 characters of content for brevity
-            except KeyError as e:
-                logging.error(f"KeyError finding document id {i}: {e}")
-                if doc_id not in vector_store.docstore._dict:
-                    logging.error(f"Document id {doc_id} not found in docstore._dict")
-
-    # Log the results for debugging
-    logging.info(f"Total documents considered: {len(results)}")
-    for res in results:
-        logging.info(f"Document ID: {res[0].metadata['id']}, Score: {res[1]}")
-
-    return results
-
-
 # Chatbot response function with RAG
 def chatbot_response(input_text):
     # Normalize input text
@@ -278,7 +179,9 @@ def chatbot_response(input_text):
 
     # Retrieve relevant documents with similarity scores
     try:
-        search_results = similarity_search_with_score(normalized_input)
+        search_results = similarity_search_with_score(
+            normalized_input, vector_store, embeddings, EMBEDDING_DIM
+        )
         logging.info(f"Retrieved documents with scores")
     except KeyError as e:
         logging.error(f"Error while retrieving documents: {e}")
