@@ -3,23 +3,17 @@
 import os
 import openai
 import gradio as gr
-import numpy as np
 from dotenv import load_dotenv
-from langchain.memory import ConversationBufferMemory
-from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.document import Document
-from langchain_community.docstore.in_memory import InMemoryDocstore  # Ensure this is imported
-from langchain_openai import OpenAIEmbeddings
 import logging
 import nltk
+from langchain.memory import ConversationBufferMemory
+from langchain_openai import OpenAIEmbeddings
 from document_processing import load_documents_from_folder, normalize_text, encoding
-from faiss_utils import (
-    save_faiss_index_metadata_and_docstore,
-    load_faiss_index_metadata_and_docstore,
-    train_faiss_index,
-    add_vectors_to_faiss_index,
-    similarity_search_with_score
+from vector_store_utils import (
+    calculate_file_paths,
+    load_or_initialize_vector_store
 )
+from faiss_utils import similarity_search_with_score  # Import the function here
 import faiss  # Ensure faiss is imported
 
 # Configure logging
@@ -78,98 +72,17 @@ memory = ConversationBufferMemory()
 
 # Calculate absolute paths based on the script's location
 script_dir = os.path.dirname(os.path.abspath(__file__))
-faiss_index_path = os.path.join(script_dir, FAISS_INDEX_PATH)
-metadata_path = os.path.join(script_dir, METADATA_PATH)
-docstore_path = os.path.join(script_dir, DOCSTORE_PATH)
-ingest_path = os.path.join(script_dir, INGEST_PATH)
-
-# Load previous FAISS index, metadata, and docstore if they exist
-loaded_faiss_index, loaded_metadata, loaded_docstore = (
-    load_faiss_index_metadata_and_docstore(
-        faiss_index_path, metadata_path, docstore_path
-    )
+faiss_index_path, metadata_path, docstore_path = calculate_file_paths(
+    script_dir, FAISS_INDEX_PATH, METADATA_PATH, DOCSTORE_PATH
 )
 
-# Initialize the vector store
-if loaded_faiss_index and loaded_metadata and loaded_docstore:
-    vector_store = FAISS(
-        embedding_function=embeddings,
-        index=loaded_faiss_index,
-        docstore=loaded_docstore,
-        index_to_docstore_id=loaded_metadata,
-    )
-    index_to_docstore_id = loaded_metadata
-    logging.info("Loaded vector store from saved files.")
-else:
-    # Create a new FAISS index and docstore if loading failed
-    documents = load_documents_from_folder(ingest_path, CHUNK_SIZE_MAX)
+# Correct the ingest path relative to the script's directory
+ingest_path = os.path.join(script_dir, INGEST_PATH)
 
-    if not documents:
-        raise ValueError(f"No documents found in the folder: {ingest_path}")
-
-    # Log the number of documents loaded
-    logging.info(f"Total chunks loaded: {len(documents)}")
-
-    # Determine the number of clusters dynamically based on the number of documents
-    num_documents = len(documents)
-    num_clusters = min(
-        max(10, num_documents // 2), num_documents
-    )  # At least 10 clusters or half the number of documents, but not more than the number of documents
-
-    quantizer = faiss.IndexFlatIP(EMBEDDING_DIM)  # Inner product (cosine similarity)
-    index = faiss.IndexIVFFlat(
-        quantizer, EMBEDDING_DIM, num_clusters, faiss.METRIC_INNER_PRODUCT
-    )
-    index.nprobe = (
-        10  # Number of clusters to search. Adjust based on performance needs.
-    )
-    docstore = InMemoryDocstore()
-    index_to_docstore_id = {}  # Simple index-to-docstore mapping
-    vector_store = FAISS(
-        embedding_function=embeddings,
-        index=index,
-        docstore=docstore,
-        index_to_docstore_id=index_to_docstore_id,
-    )
-
-    # Collect vectors for training
-    training_vectors = []
-    for doc in documents:
-        normalized_doc = normalize_text(doc["content"])
-        vectors = embeddings.embed_query(normalized_doc)
-
-        # Debugging: Validate embedding dimensions
-        logging.info(
-            f"Embedding dimension: {len(vectors)}, Config EMBEDDING_DIM: {EMBEDDING_DIM}"
-        )
-        assert (
-            len(vectors) == EMBEDDING_DIM
-        ), f"Embedding dimension {len(vectors)} does not match expected {EMBEDDING_DIM}"
-
-        training_vectors.append(vectors)
-
-    # Convert to numpy array
-    training_vectors = np.array(training_vectors, dtype="float32")
-
-    # Train the FAISS index
-    train_faiss_index(vector_store, training_vectors, num_clusters)
-
-    # Add vectors to the FAISS index
-    add_vectors_to_faiss_index(documents, vector_store, embeddings, normalize_text)
-
-    # Save FAISS index, metadata, and docstore to disk
-    save_faiss_index_metadata_and_docstore(
-        vector_store.index,
-        index_to_docstore_id,
-        docstore,
-        faiss_index_path,
-        metadata_path,
-        docstore_path,
-    )
-
-    # Verify mapping after saving
-    logging.info(f"Document ID to Docstore Mapping: {index_to_docstore_id}")
-
+# Initialize or load vector store
+vector_store, index_to_docstore_id = load_or_initialize_vector_store(
+    embeddings, ingest_path, CHUNK_SIZE_MAX, EMBEDDING_DIM, faiss_index_path, metadata_path, docstore_path
+)
 
 # Chatbot response function with RAG
 def chatbot_response(input_text):
