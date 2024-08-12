@@ -1,3 +1,5 @@
+# scripts/chatbot.py
+
 import os
 import openai
 import gradio as gr
@@ -10,10 +12,9 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.docstore.document import Document
 from langchain_openai import OpenAIEmbeddings
-import tiktoken
 import logging
 import nltk
-from nltk.tokenize import sent_tokenize, blankline_tokenize
+from document_processing import load_documents_from_folder, normalize_text, encoding  # Import from the new module
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -57,109 +58,6 @@ CHUNK_SIZE_MAX = int(os.getenv("CHUNK_SIZE_MAX", 512))  # Chunk size in tokens
 # Print environment variables
 logging.info(f"SIMILARITY_THRESHOLD: {SIMILARITY_THRESHOLD}")
 logging.info(f"TOP_SIMILARITY_RESULTS: {TOP_SIMILARITY_RESULTS}")
-
-# Initialize tiktoken for token counting with cl100k_base encoding
-encoding = tiktoken.get_encoding("cl100k_base")
-
-
-# Normalize text
-def normalize_text(text):
-    return text.strip().lower()
-
-
-def chunk_text_hybrid(text, chunk_size_max):
-    paragraphs = blankline_tokenize(text)
-    chunks = []
-    current_chunk = []
-    current_chunk_size = 0
-
-    for paragraph in paragraphs:
-        paragraph_tokens = encoding.encode(paragraph)
-        paragraph_size = len(paragraph_tokens)
-
-        if paragraph_size > chunk_size_max:
-            process_large_paragraph(
-                paragraph, chunk_size_max, chunks, current_chunk, current_chunk_size
-            )
-            current_chunk, current_chunk_size = finalize_chunk(current_chunk, chunks)
-            continue
-
-        if current_chunk_size + paragraph_size > chunk_size_max:
-            current_chunk, current_chunk_size = finalize_chunk(current_chunk, chunks)
-
-        current_chunk.append(paragraph)
-        current_chunk_size += paragraph_size
-
-    if current_chunk:
-        chunks.append(" ".join(current_chunk))
-
-    return chunks
-
-
-def process_large_paragraph(
-    paragraph, chunk_size_max, chunks, current_chunk, current_chunk_size
-):
-    sentences = sent_tokenize(paragraph)
-    for sentence in sentences:
-        sentence_tokens = encoding.encode(sentence)
-        sentence_size = len(sentence_tokens)
-
-        if current_chunk_size + sentence_size > chunk_size_max:
-            current_chunk, current_chunk_size = finalize_chunk(current_chunk, chunks)
-
-        current_chunk.append(sentence)
-        current_chunk_size += sentence_size
-
-
-def finalize_chunk(current_chunk, chunks):
-    if current_chunk:
-        chunks.append(" ".join(current_chunk))
-    return [], 0
-
-
-def load_documents_from_folder(folder_path):
-    try:
-        filenames = get_text_filenames(folder_path)
-        documents = process_files_in_folder(folder_path, filenames)
-    except FileNotFoundError:
-        logging.error(f"Folder not found: {folder_path}")
-        documents = []
-    return documents
-
-
-def get_text_filenames(folder_path):
-    return [
-        filename for filename in os.listdir(folder_path) if filename.endswith(".txt")
-    ]
-
-
-def process_files_in_folder(folder_path, filenames):
-    documents = []
-    for idx, filename in enumerate(filenames):
-        file_path = os.path.join(folder_path, filename)
-        content = load_file_content(file_path)
-        chunks = chunk_text_hybrid(content, CHUNK_SIZE_MAX)
-        documents.extend(create_document_entries(idx, filename, chunks))
-        logging.info(
-            f"Loaded and chunked document {filename} into {len(chunks)} chunks"
-        )
-    return documents
-
-
-def load_file_content(file_path):
-    with open(file_path, "r") as file:
-        return file.read()
-
-
-def create_document_entries(doc_id, filename, chunks):
-    return [
-        {
-            "id": f"{doc_id}-{chunk_idx}",
-            "content": chunk,
-            "filename": filename,
-        }
-        for chunk_idx, chunk in enumerate(chunks)
-    ]
 
 # Initialize OpenAI client
 from openai import OpenAI
@@ -231,7 +129,7 @@ if loaded_faiss_index and loaded_metadata and loaded_docstore:
     logging.info("Loaded vector store from saved files.")
 else:
     # Create a new FAISS index and docstore if loading failed
-    documents = load_documents_from_folder(ingest_path)
+    documents = load_documents_from_folder(ingest_path, CHUNK_SIZE_MAX)
 
     if not documents:
         raise ValueError(f"No documents found in the folder: {ingest_path}")
