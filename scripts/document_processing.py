@@ -116,7 +116,7 @@ def load_documents_from_folder(folder_path, chunk_size_max):
                 content = load_file_content(file_path)
                 chunks = chunk_text_hybrid(content, chunk_size_max)
                 doc_id = len(documents)  # Use the current number of documents as an ID
-                documents.extend(create_document_entries(doc_id, filename, chunks))
+                documents.extend(create_document_entries(doc_id, filename, file_path, chunks))
                 logging.info(f"Loaded and chunked document {file_path} into {len(chunks)} chunks")
     
     if not documents:
@@ -137,23 +137,25 @@ def load_file_content(file_path):
     with open(file_path, "r", encoding="utf-8") as file:
         return file.read()
 
-def create_document_entries(doc_id, filename, chunks):
+def create_document_entries(doc_id, filename, filepath, chunks):
     """
-    Create document entries with unique IDs for each chunk.
+    Create document entries with unique IDs for each chunk, including file path.
     
     Args:
         doc_id (int): The document ID.
         filename (str): The filename of the document.
+        filepath (str): The full file path of the document.
         chunks (list): The chunks of text content.
     
     Returns:
-        list: List of document dictionaries with ID, content, and filename.
+        list: List of document dictionaries with ID, content, filename, and filepath.
     """
     return [
         {
             "id": f"{doc_id}-{chunk_idx}",
             "content": chunk,
             "filename": filename,
+            "filepath": filepath,
         }
         for chunk_idx, chunk in enumerate(chunks)
     ]
