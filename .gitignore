@@ -35,3 +35,6 @@ embeddings/*
 # Ignore all files in the ingest directory except .gitkeep
 ingest/*
 !ingest/.gitkeep
+
+# Temporary files
+temp/*
