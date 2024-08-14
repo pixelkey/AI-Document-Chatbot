@@ -1,4 +1,4 @@
-# Support Chatbot
+# AI Document Chatbot
 
 This project is a support chatbot that uses OpenAI's GPT-4o, FAISS for similarity search, and Gradio for the web interface. The chatbot retrieves relevant documents from a specified folder and generates responses based on those documents.
 
