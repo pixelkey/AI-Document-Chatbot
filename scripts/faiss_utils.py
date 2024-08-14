@@ -57,7 +57,7 @@ def add_vectors_to_faiss_index(documents, vector_store, embeddings, normalize_te
         # Add document to vector store
         document = Document(
             page_content=normalized_doc,
-            metadata={"id": doc_id, "filename": doc["filename"]},
+            metadata={"id": doc_id, "filename": doc["filename"], "filepath": doc["filepath"]},
         )
         vector_store.add_texts(
             [normalized_doc], metadatas=[document.metadata], ids=[doc_id]

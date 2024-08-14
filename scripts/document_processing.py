@@ -116,8 +116,12 @@ def load_documents_from_folder(folder_path, chunk_size_max):
                 content = load_file_content(file_path)
                 chunks = chunk_text_hybrid(content, chunk_size_max)
                 doc_id = len(documents)  # Use the current number of documents as an ID
-                documents.extend(create_document_entries(doc_id, filename, file_path, chunks))
-                logging.info(f"Loaded and chunked document {file_path} into {len(chunks)} chunks")
+
+                # Get Relative path to the file from the root folder and don't include the file name
+                relative_path = os.path.relpath(root, folder_path)
+
+                documents.extend(create_document_entries(doc_id, filename, relative_path, chunks))
+                logging.info(f"Loaded and chunked document {relative_path}/{filename} into {len(chunks)} chunks")
     
     if not documents:
         logging.error(f"No documents found in the folder: {folder_path}")
@@ -144,7 +148,7 @@ def create_document_entries(doc_id, filename, filepath, chunks):
     Args:
         doc_id (int): The document ID.
         filename (str): The filename of the document.
-        filepath (str): The full file path of the document.
+        filepath (str): The relative path of the document.
         chunks (list): The chunks of text content.
     
     Returns:
@@ -155,7 +159,7 @@ def create_document_entries(doc_id, filename, filepath, chunks):
             "id": f"{doc_id}-{chunk_idx}",
             "content": chunk,
             "filename": filename,
-            "filepath": filepath,
+            "filepath": filepath,  # Ensure filepath is included here
         }
         for chunk_idx, chunk in enumerate(chunks)
     ]

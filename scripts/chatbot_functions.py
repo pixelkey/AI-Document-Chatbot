@@ -4,6 +4,7 @@ import logging
 from faiss_utils import similarity_search_with_score
 from document_processing import normalize_text
 
+
 def chatbot_response(input_text, context):
     # Normalize input text
     normalized_input = normalize_text(input_text)
@@ -49,7 +50,7 @@ def chatbot_response(input_text, context):
     combined_input = f"{context['SYSTEM_PROMPT']}\n\n"
     combined_input += "\n\n".join(
         [
-            f"Context Document {idx+1} ({doc.metadata['filename']}):\n{doc.page_content}"
+            f"Context Document {idx+1} ({doc.metadata.get('filepath', '')}/{doc.metadata['filename']}):\n{doc.page_content}"
             for idx, doc in enumerate(filtered_docs)
         ]
     )
@@ -68,7 +69,7 @@ def chatbot_response(input_text, context):
         messages.append(
             {
                 "role": "user",
-                "content": f"Context Document {idx+1} ({doc.metadata['filename']}): {doc.page_content}",
+                "content": f"Context Document {idx+1} ({doc.metadata.get('filepath', '')}/{doc.metadata['filename']}): {doc.page_content}",
             }
         )
     messages.append({"role": "user", "content": f"User Prompt: {input_text}"})
@@ -91,16 +92,17 @@ def chatbot_response(input_text, context):
         {"input": input_text}, {"output": response.choices[0].message.content}
     )
 
-    # Construct reference list
+    # Construct reference list with clickable links
     references = "References:\n" + "\n".join(
         [
-            f"Chunk {doc.metadata['id']}: {doc.metadata['filename']}"
+            f"[Chunk {doc.metadata['id']}: {doc.metadata.get('filepath', '')}/{doc.metadata['filename']}]"
             for doc in filtered_docs
         ]
     )
 
     # Return chat history, references, and clear input
     return context["memory"].buffer, references, ""
+
 
 def clear_history(context):
     context["memory"].clear()  # Clear the conversation memory
