@@ -99,3 +99,4 @@ Features I intend to add:
 - **Auto update embeddings:** When app starts, scan and cross-check ingest folder with the docstore. Update changed files and add new files.
 - **Resource path links:** Link resources to their text files for easier referencing of files.
 - **Scraping from web page or website:** Supply a URL to a webpage or website and run a script to scrape into text files stored in the ingest folder.
+- **Overlap chunks:** Overlap chunks with an option for overlap size. Also clean/remove overlapping text before adding chunks to the prompt.
