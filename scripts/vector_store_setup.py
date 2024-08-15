@@ -11,7 +11,7 @@ def setup_vector_store(embeddings):
     """
     Initialize or load the vector store.
     Returns:
-        tuple: Initialized vector store, and mapping of index to document store IDs
+        object: Initialized vector store.
     """
     script_dir = os.path.dirname(os.path.abspath(__file__))
     faiss_index_path, metadata_path, docstore_path = calculate_file_paths(

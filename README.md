@@ -100,3 +100,4 @@ Features I intend to add:
 - **Resource path links:** Link resources to their text files for easier referencing of files.
 - **Scraping from web page or website:** Supply a URL to a webpage or website and run a script to scrape into text files stored in the ingest folder.
 - **Overlap chunks:** Overlap chunks with an option for overlap size. Also clean/remove overlapping text before adding chunks to the prompt.
+- **Option to retrieve chunk or document:** By default, chunks are retrieved and used for context. However, an option could be provided to retrieve the whole document for greater context, but at the expense of more tokens required. 

@@ -24,7 +24,7 @@ def initialize_model_and_retrieval():
     memory = ConversationBufferMemory()
 
     # Setup vector store
-    vector_store, index_to_docstore_id = setup_vector_store(embeddings)
+    vector_store = setup_vector_store(embeddings)
 
     # Prepare and return the context
     context = {
