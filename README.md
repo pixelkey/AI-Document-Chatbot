@@ -54,8 +54,8 @@ METADATA_PATH=../embeddings/metadata.pkl
 DOCSTORE_PATH=../embeddings/docstore.pkl
 INGEST_PATH=../ingest
 SYSTEM_PROMPT=Please only provide responses based on the information provided. If it is not available, please let me know.
-SIMILARITY_THRESHOLD=0.1
-TOP_SIMILARITY_RESULTS=2
+SIMILARITY_THRESHOLD=0.25
+TOP_SIMILARITY_RESULTS=3
 ```
 Replace `your-openai-api-key` with your actual OpenAI API key.
 
@@ -64,7 +64,7 @@ Make sure the `INGEST_PATH` directory specified in the `.env` file exists and co
 
 ### 7. Run the application
 ```bash
-python scripts/chatbot.py
+python scripts/main.py
 ```
 
 This will launch the Gradio interface for the chatbot. Open the provided local URL in your web browser to interact with the chatbot.
