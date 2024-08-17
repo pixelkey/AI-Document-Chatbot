@@ -1,9 +1,0 @@
-gradio
-openai==1.38.0
-langchain
-langchain-community
-langchain-openai
-faiss-cpu
-tiktoken
-python-dotenv
-nltk

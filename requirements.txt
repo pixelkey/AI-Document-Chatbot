@@ -1,0 +1,9 @@
+gradio==4.41.0
+openai==1.38.0
+langchain==0.2.12
+langchain-community==0.2.11
+langchain-openai==0.1.20
+faiss-cpu==1.8.0.post1
+tiktoken==0.7.0
+python-dotenv==1.0.1
+nltk==3.8.1

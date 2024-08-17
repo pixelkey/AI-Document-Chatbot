@@ -39,9 +39,9 @@ For Windows:
 ```
 
 ### 4. Install required packages
-Ensure you have a `requirements.txt` file in your project directory, then run:
+Ensure you have a `requirements-lock.txt` file in your project directory, then run:
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-lock.txt
 ```
 
 ### 5. Set up environment variables
