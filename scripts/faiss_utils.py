@@ -8,6 +8,7 @@ import numpy as np
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.docstore.document import Document  # Import the Document class
+from chunk_merging import intelligent_chunk_merging  # Import the merging function
 
 def save_faiss_index_metadata_and_docstore(
     faiss_index, metadata, docstore, faiss_index_path, metadata_path, docstore_path
@@ -101,10 +102,18 @@ def similarity_search_with_score(query, vector_store, embeddings, EMBEDDING_DIM,
                 if doc_id is None:
                     raise KeyError(f"Document ID {i} not found in mapping.")
                 doc = vector_store.docstore.search(doc_id)
-                results.append((doc, score))
+                results.append({
+                    "id": doc_id, 
+                    "content": doc.page_content, 
+                    "score": float(score),
+                    "metadata": doc.metadata
+                })
                 logging.info(
                     f"Matched document {doc_id} with score {score} and content: {doc.page_content[:200]}..."
                 )  # Show first 200 characters of content for brevity
+                logging.info(
+                    f"Metadata for document {doc_id}: filename={doc.metadata.get('filename', '')}, filepath={doc.metadata.get('filepath', '')}"
+                )
             except KeyError as e:
                 logging.error(f"KeyError finding document id {i}: {e}")
                 if doc_id not in vector_store.docstore._dict:
@@ -113,6 +122,9 @@ def similarity_search_with_score(query, vector_store, embeddings, EMBEDDING_DIM,
     # Log the results for debugging
     logging.info(f"Total documents considered: {len(results)}")
     for res in results:
-        logging.info(f"Document ID: {res[0].metadata['id']}, Score: {res[1]}")
+        logging.info(f"Document ID: {res['id']}, Score: {res['score']}")
 
-    return results
+    # Merge overlapping chunks intelligently
+    merged_chunks = intelligent_chunk_merging(results)
+
+    return merged_chunks
