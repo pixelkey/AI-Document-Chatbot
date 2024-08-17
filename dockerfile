@@ -7,7 +7,7 @@ WORKDIR /app
 COPY . /app
 
 # Install Python dependencies
-RUN pip install --no-cache-dir --timeout=120 -r requirements.txt
+RUN pip install --no-cache-dir --timeout=120 -r requirements-lock.txt
 
 
 # Expose the port
