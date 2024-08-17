@@ -4,11 +4,17 @@ import os
 import logging
 import tiktoken
 from nltk.tokenize import sent_tokenize, blankline_tokenize
+from nltk import download as nltk_download
+from dotenv import load_dotenv
+
+# Ensure that the 'punkt' tokenizer is downloaded
+nltk_download('punkt')
+
+# Load environment variables from .env file
+load_dotenv()
+CHUNK_OVERLAP_PERCENTAGE = int(os.getenv("CHUNK_OVERLAP_PERCENTAGE", 20))  # Default to 20% if not set
 
 # Initialize tiktoken for token counting with cl100k_base encoding
-# Note: This encoding is used for certain OpenAI models.
-# It is only used for token counting and does not affect the tokenization process.
-# However, it is important to use the same encoding for token counting as the model.
 encoding = tiktoken.get_encoding("cl100k_base")
 
 def normalize_text(text):
@@ -20,14 +26,14 @@ def normalize_text(text):
 def chunk_text_hybrid(text, chunk_size_max):
     """
     Split text into chunks based on paragraphs and sentences. If a paragraph
-    exceeds the chunk size, it is split further by sentences.
+    exceeds the chunk size, it is split further by sentences. Chunks overlap by a percentage of the chunk size.
     
     Args:
         text (str): The input text to be chunked.
         chunk_size_max (int): The maximum size of each chunk in tokens.
     
     Returns:
-        list: List of text chunks.
+        list: List of text chunks with their token counts.
     """
     paragraphs = blankline_tokenize(text)
     chunks = []
@@ -52,9 +58,63 @@ def chunk_text_hybrid(text, chunk_size_max):
         current_chunk_size += paragraph_size
 
     if current_chunk:
-        chunks.append(" ".join(current_chunk))
+        chunks.append((" ".join(current_chunk), current_chunk_size))
 
-    return chunks
+    # Calculate overlap size as a percentage of the chunk size
+    overlap_size = int((CHUNK_OVERLAP_PERCENTAGE / 100) * chunk_size_max)
+
+    # Add overlapping logic
+    overlapped_chunks = add_chunk_overlap(chunks, chunk_size_max, overlap_size)
+
+    return overlapped_chunks
+
+def add_chunk_overlap(chunks, chunk_size_max, overlap_size):
+    """
+    Add overlap between chunks by a specified number of tokens, ensuring overlap
+    occurs at the sentence level and includes meaningful content.
+    
+    Args:
+        chunks (list): List of chunks with their token counts.
+        chunk_size_max (int): The maximum size of each chunk in tokens.
+        overlap_size (int): The number of tokens to overlap between chunks.
+    
+    Returns:
+        list: List of overlapped chunks with updated token counts.
+    """
+    overlapped_chunks = []
+    previous_chunk_sentences = []
+
+    for chunk, chunk_size in chunks:
+        current_chunk_tokens = encoding.encode(chunk)
+
+        if previous_chunk_sentences:
+            # Create the overlap text by joining previous sentences
+            overlap_text = " ".join(previous_chunk_sentences)
+            overlap_tokens = encoding.encode(overlap_text)
+            current_chunk_tokens = overlap_tokens + current_chunk_tokens
+
+        # Ensure the chunk doesn't exceed the max size
+        if len(current_chunk_tokens) > chunk_size_max:
+            current_chunk_tokens = current_chunk_tokens[:chunk_size_max]
+
+        # Decode the current chunk to text
+        current_chunk_text = encoding.decode(current_chunk_tokens)
+
+        # Tokenize the current chunk into sentences
+        sentences = sent_tokenize(current_chunk_text)
+
+        # Identify sentences for the next overlap
+        overlap_text = ""
+        overlap_tokens = []
+        while sentences and len(overlap_tokens) < overlap_size:
+            overlap_text = sentences.pop(-1) + " " + overlap_text
+            overlap_tokens = encoding.encode(overlap_text.strip())
+
+        # Save the current chunk and prepare the next overlap
+        overlapped_chunks.append((current_chunk_text, len(current_chunk_tokens)))
+        previous_chunk_sentences = sent_tokenize(overlap_text.strip())
+
+    return overlapped_chunks
 
 def process_large_paragraph(
     paragraph, chunk_size_max, chunks, current_chunk, current_chunk_size
@@ -92,7 +152,9 @@ def finalize_chunk(current_chunk, chunks):
         tuple: An empty list and a size of 0 to reset the current chunk.
     """
     if current_chunk:
-        chunks.append(" ".join(current_chunk))
+        chunk_text = " ".join(current_chunk)
+        chunk_size = len(encoding.encode(chunk_text))
+        chunks.append((chunk_text, chunk_size))
     return [], 0
 
 def load_documents_from_folder(folder_path, chunk_size_max):
@@ -149,10 +211,10 @@ def create_document_entries(doc_id, filename, filepath, chunks):
         doc_id (int): The document ID.
         filename (str): The filename of the document.
         filepath (str): The relative path of the document.
-        chunks (list): The chunks of text content.
+        chunks (list): The chunks of text content and their token counts.
     
     Returns:
-        list: List of document dictionaries with ID, content, filename, and filepath.
+        list: List of document dictionaries with ID, content, filename, filepath, and token count.
     """
     return [
         {
@@ -160,6 +222,7 @@ def create_document_entries(doc_id, filename, filepath, chunks):
             "content": chunk,
             "filename": filename,
             "filepath": filepath,  # Ensure filepath is included here
+            "token_count": chunk_size,  # Include token count
         }
-        for chunk_idx, chunk in enumerate(chunks)
+        for chunk_idx, (chunk, chunk_size) in enumerate(chunks)
     ]
