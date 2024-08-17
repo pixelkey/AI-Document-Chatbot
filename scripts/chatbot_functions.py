@@ -1,5 +1,3 @@
-# scripts/chatbot_functions.py
-
 import logging
 from faiss_utils import similarity_search_with_score
 from document_processing import normalize_text
@@ -22,44 +20,44 @@ def chatbot_response(input_text, context):
 
     # Filter documents based on similarity score and limit to top results with the token limit consideration
     filtered_results = [
-        result for result in search_results if result[1] >= context["SIMILARITY_THRESHOLD"]
+        result for result in search_results if result['score'] >= context["SIMILARITY_THRESHOLD"]
     ]
     logging.info(
-        f"Filtered results by similarity threshold: {[result[1] for result in filtered_results]}"
+        f"Filtered results by similarity threshold: {[result['score'] for result in filtered_results]}"
     )
 
     # Remove duplicates by content
     seen_contents = set()
     unique_filtered_results = []
     for result in filtered_results:
-        content_hash = hash(result[0].page_content)
+        content_hash = hash(result['content'])
         if content_hash not in seen_contents:
             unique_filtered_results.append(result)
             seen_contents.add(content_hash)
 
     # Sort filtered results by similarity score in descending order
-    unique_filtered_results.sort(key=lambda x: x[1], reverse=True)
+    unique_filtered_results.sort(key=lambda x: x['score'], reverse=True)
     filtered_docs = [
-        result[0] for result in unique_filtered_results[:context["TOP_SIMILARITY_RESULTS"]]
+        result for result in unique_filtered_results[:context["TOP_SIMILARITY_RESULTS"]]
     ]
+    
+    # Handle possible missing 'id' and log top similarity results
     logging.info(
-        f"Top similarity results: {[(doc.metadata['id'], score) for doc, score in unique_filtered_results[:context['TOP_SIMILARITY_RESULTS']]]}"
+        f"Top similarity results: {[(res['id'], res['score']) for res in unique_filtered_results[:context['TOP_SIMILARITY_RESULTS']]]}"
     )
 
     # Create the final combined input
     combined_input = f"{context['SYSTEM_PROMPT']}\n\n"
     combined_input += "\n\n".join(
         [
-            f"Context Document {idx+1} ({doc.metadata.get('filepath', '')}/{doc.metadata['filename']}):\n{doc.page_content}"
+            f"Context Document {idx+1}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}\n{doc['content']}"
             for idx, doc in enumerate(filtered_docs)
         ]
     )
     combined_input += f"\n\nUser Prompt:\n{input_text}"
 
-    logging.info(f"Prepared combined input for LLM")
-
-    # log the combined input for debugging
-    logging.info(f"Combined input: {combined_input}")
+    # Log the final content sent to the LLM
+    logging.info(f"Final content sent to LLM:\n{combined_input}")
 
     # Create the list of messages for the Chat API
     messages = [
@@ -69,7 +67,7 @@ def chatbot_response(input_text, context):
         messages.append(
             {
                 "role": "user",
-                "content": f"Context Document {idx+1} ({doc.metadata.get('filepath', '')}/{doc.metadata['filename']}): {doc.page_content}",
+                "content": f"Context Document {idx+1} ({doc['id']}): {doc['content']}",
             }
         )
     messages.append({"role": "user", "content": f"User Prompt: {input_text}"})
@@ -95,7 +93,7 @@ def chatbot_response(input_text, context):
     # Construct reference list with clickable links
     references = "References:\n" + "\n".join(
         [
-            f"[Chunk {doc.metadata['id']}: {doc.metadata.get('filepath', '')}/{doc.metadata['filename']}]"
+            f"[Chunk {doc['id']}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}]"
             for doc in filtered_docs
         ]
     )
