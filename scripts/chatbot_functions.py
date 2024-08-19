@@ -90,7 +90,7 @@ def chatbot_response(input_text, context):
         {"input": input_text}, {"output": response.choices[0].message.content}
     )
 
-    # Construct reference list with clickable links
+    # Construct reference list
     references = "References:\n" + "\n".join(
         [
             f"[Chunk {doc['id']}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}]"

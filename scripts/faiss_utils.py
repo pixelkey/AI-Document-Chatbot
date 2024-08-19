@@ -58,7 +58,7 @@ def add_vectors_to_faiss_index(documents, vector_store, embeddings, normalize_te
         # Add document to vector store
         document = Document(
             page_content=normalized_doc,
-            metadata={"id": doc_id, "filename": doc["filename"], "filepath": doc["filepath"]},
+            metadata={"id": doc_id, "filename": doc["filename"], "filepath": doc["filepath"], "chunk_size": doc["chunk_size"], "overlap_size": doc["overlap_size"]},
         )
         vector_store.add_texts(
             [normalized_doc], metadatas=[document.metadata], ids=[doc_id]
@@ -112,7 +112,7 @@ def similarity_search_with_score(query, vector_store, embeddings, EMBEDDING_DIM,
                     f"Matched document {doc_id} with score {score} and content: {doc.page_content[:200]}..."
                 )  # Show first 200 characters of content for brevity
                 logging.info(
-                    f"Metadata for document {doc_id}: filename={doc.metadata.get('filename', '')}, filepath={doc.metadata.get('filepath', '')}"
+                    f"Metadata for document {doc_id}: filename={doc.metadata.get('filename', '')}, filepath={doc.metadata.get('filepath', '')}, chunk_size={doc.metadata.get('chunk_size', 0)}, overlap_size={doc.metadata.get('overlap_size', 0)}"
                 )
             except KeyError as e:
                 logging.error(f"KeyError finding document id {i}: {e}")
@@ -124,7 +124,9 @@ def similarity_search_with_score(query, vector_store, embeddings, EMBEDDING_DIM,
     for res in results:
         logging.info(f"Document ID: {res['id']}, Score: {res['score']}")
 
-    # Merge overlapping chunks intelligently
-    merged_chunks = intelligent_chunk_merging(results)
+    return results
 
-    return merged_chunks
+    # # Merge overlapping chunks intelligently
+    # merged_chunks = intelligent_chunk_merging(results)
+
+    # return merged_chunks

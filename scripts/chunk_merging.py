@@ -31,6 +31,11 @@ def intelligent_chunk_merging(retrieved_chunks):
         chunk_id = sorted_chunks[i]['id']
         chunk_metadata = sorted_chunks[i].get('metadata', {})
 
+        # If overlap metadata exists, use it to trim the overlap
+        overlap_size = chunk_metadata.get('overlap_size', 0)
+        if overlap_size > 0:
+            chunk_content = chunk_content[overlap_size:]
+
         if not current_merged_chunk:
             current_merged_chunk = chunk_content
             current_merged_score = chunk_score

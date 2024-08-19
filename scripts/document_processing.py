@@ -61,14 +61,14 @@ def chunk_text_hybrid(text, chunk_size_max):
         chunks.append((" ".join(current_chunk), current_chunk_size))
 
     # Calculate overlap size as a percentage of the chunk size
-    overlap_size = int((CHUNK_OVERLAP_PERCENTAGE / 100) * chunk_size_max)
+    overlap_size_max = int((CHUNK_OVERLAP_PERCENTAGE / 100) * chunk_size_max)
 
     # Add overlapping logic
-    overlapped_chunks = add_chunk_overlap(chunks, chunk_size_max, overlap_size)
+    overlapped_chunks = add_chunk_overlap(chunks, chunk_size_max, overlap_size_max)
 
     return overlapped_chunks
 
-def add_chunk_overlap(chunks, chunk_size_max, overlap_size):
+def add_chunk_overlap(chunks, chunk_size_max, overlap_size_max):
     """
     Add overlap between chunks by a specified number of tokens, ensuring overlap
     occurs at the sentence level and includes meaningful content.
@@ -106,12 +106,12 @@ def add_chunk_overlap(chunks, chunk_size_max, overlap_size):
         # Identify sentences for the next overlap
         overlap_text = ""
         overlap_tokens = []
-        while sentences and len(overlap_tokens) < overlap_size:
+        while sentences and len(overlap_tokens) < overlap_size_max:
             overlap_text = sentences.pop(-1) + " " + overlap_text
             overlap_tokens = encoding.encode(overlap_text.strip())
 
         # Save the current chunk and prepare the next overlap
-        overlapped_chunks.append((current_chunk_text, len(current_chunk_tokens)))
+        overlapped_chunks.append((current_chunk_text, len(current_chunk_tokens), len(overlap_tokens)))
         previous_chunk_sentences = sent_tokenize(overlap_text.strip())
 
     return overlapped_chunks
@@ -214,15 +214,16 @@ def create_document_entries(doc_id, filename, filepath, chunks):
         chunks (list): The chunks of text content and their token counts.
     
     Returns:
-        list: List of document dictionaries with ID, content, filename, filepath, and token count.
+        list: List of document dictionaries with ID, content, filename, filepath, token count, and overlap metadata.
     """
     return [
         {
             "id": f"{doc_id}-{chunk_idx}",
             "content": chunk,
             "filename": filename,
-            "filepath": filepath,  # Ensure filepath is included here
-            "token_count": chunk_size,  # Include token count
+            "filepath": filepath,
+            "chunk_size": chunk_size, # The token count of the chunk
+            "overlap_size": overlap_size # The token count of the overlap
         }
-        for chunk_idx, (chunk, chunk_size) in enumerate(chunks)
+        for chunk_idx, (chunk, chunk_size, overlap_size) in enumerate(chunks)
     ]
