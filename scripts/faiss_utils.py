@@ -8,7 +8,6 @@ import numpy as np
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.docstore.document import Document  # Import the Document class
-from chunk_merging import intelligent_chunk_merging  # Import the merging function
 
 def save_faiss_index_metadata_and_docstore(
     faiss_index, metadata, docstore, faiss_index_path, metadata_path, docstore_path
@@ -125,8 +124,3 @@ def similarity_search_with_score(query, vector_store, embeddings, EMBEDDING_DIM,
         logging.info(f"Document ID: {res['id']}, Score: {res['score']}")
 
     return results
-
-    # # Merge overlapping chunks intelligently
-    # merged_chunks = intelligent_chunk_merging(results)
-
-    # return merged_chunks

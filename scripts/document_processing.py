@@ -110,6 +110,10 @@ def add_chunk_overlap(chunks, chunk_size_max, overlap_size_max):
             overlap_text = sentences.pop(-1) + " " + overlap_text
             overlap_tokens = encoding.encode(overlap_text.strip())
 
+        # If it is the first chunk, there is no overlap. So set it to 0
+        if not overlapped_chunks:
+            overlap_tokens = []
+
         # Save the current chunk and prepare the next overlap
         overlapped_chunks.append((current_chunk_text, len(current_chunk_tokens), len(overlap_tokens)))
         previous_chunk_sentences = sent_tokenize(overlap_text.strip())

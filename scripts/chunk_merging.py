@@ -2,7 +2,7 @@
 
 from nltk.tokenize import sent_tokenize
 
-def intelligent_chunk_merging(retrieved_chunks):
+def chunk_merging(retrieved_chunks):
     """
     Merge retrieved chunks intelligently based on overlapping content.
     
@@ -31,10 +31,10 @@ def intelligent_chunk_merging(retrieved_chunks):
         chunk_id = sorted_chunks[i]['id']
         chunk_metadata = sorted_chunks[i].get('metadata', {})
 
-        # If overlap metadata exists, use it to trim the overlap
+        chunk_size = chunk_metadata.get('chunk_size', 0)
         overlap_size = chunk_metadata.get('overlap_size', 0)
-        if overlap_size > 0:
-            chunk_content = chunk_content[overlap_size:]
+    
+        # All chunks will have a chunk_size and overlap_size of 0 except the last chunk    
 
         if not current_merged_chunk:
             current_merged_chunk = chunk_content

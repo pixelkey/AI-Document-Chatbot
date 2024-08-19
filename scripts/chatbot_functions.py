@@ -1,6 +1,7 @@
 import logging
 from faiss_utils import similarity_search_with_score
 from document_processing import normalize_text
+from chunk_merging import chunk_merging
 
 
 def chatbot_response(input_text, context):
@@ -45,6 +46,12 @@ def chatbot_response(input_text, context):
     logging.info(
         f"Top similarity results: {[(res['id'], res['score']) for res in unique_filtered_results[:context['TOP_SIMILARITY_RESULTS']]]}"
     )
+
+
+    # Before we combine the input, we should merge the retrieved chunks where possible
+    # This is done to avoid redundancy and improve the quality of the response
+    filtered_docs = chunk_merging(filtered_docs)
+
 
     # Create the final combined input
     combined_input = f"{context['SYSTEM_PROMPT']}\n\n"
