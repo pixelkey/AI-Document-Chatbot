@@ -33,7 +33,7 @@ def chunk_text_hybrid(text, chunk_size_max):
         chunk_size_max (int): The maximum size of each chunk in tokens.
     
     Returns:
-        list: List of text chunks with their token counts.
+        list: List of text chunks with their token counts and overlap sizes.
     """
     paragraphs = blankline_tokenize(text)
     chunks = []
@@ -76,10 +76,10 @@ def add_chunk_overlap(chunks, chunk_size_max, overlap_size_max):
     Args:
         chunks (list): List of chunks with their token counts.
         chunk_size_max (int): The maximum size of each chunk in tokens.
-        overlap_size (int): The number of tokens to overlap between chunks.
+        overlap_size_max (int): The number of tokens to overlap between chunks.
     
     Returns:
-        list: List of overlapped chunks with updated token counts.
+        list: List of overlapped chunks with updated token counts and overlap sizes.
     """
     overlapped_chunks = []
     previous_chunk_sentences = []
@@ -110,12 +110,15 @@ def add_chunk_overlap(chunks, chunk_size_max, overlap_size_max):
             overlap_text = sentences.pop(-1) + " " + overlap_text
             overlap_tokens = encoding.encode(overlap_text.strip())
 
+        overlap_size = len(overlap_tokens)  # Get the correct overlap size in tokens
+
         # If it is the first chunk, there is no overlap. So set it to 0
         if not overlapped_chunks:
             overlap_tokens = []
+            overlap_size = 0
 
         # Save the current chunk and prepare the next overlap
-        overlapped_chunks.append((current_chunk_text, len(current_chunk_tokens), len(overlap_tokens)))
+        overlapped_chunks.append((current_chunk_text, chunk_size, overlap_size))
         previous_chunk_sentences = sent_tokenize(overlap_text.strip())
 
     return overlapped_chunks
@@ -212,7 +215,6 @@ def create_document_entries(doc_id, filename, filepath, chunks):
     Create document entries with unique IDs for each chunk, including file path.
     
     Args:
-        id (int): The chunk ID.
         doc_id (int): The document ID.
         filename (str): The filename of the document.
         filepath (str): The relative path of the document.
