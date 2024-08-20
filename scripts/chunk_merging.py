@@ -63,71 +63,30 @@ def chunk_merging(retrieved_chunks):
         for chunk in chunks:
             print(f"Chunk ID: {chunk['id']} | Score: {chunk['score']} | Content: {chunk['content']}")
 
-
-    # Merge the chunks within each group
+    
+    # Remove the overlap from the content of each chunk within the same group if there is an overlap
     for doc_id, chunks in grouped_chunks.items():
-        current_merged_chunk = ""
-        current_merged_score = None
-        current_merged_ids = []
-        current_merged_metadata = {}
-
-        for chunk in chunks:
-            # If the current merged chunk is empty, initialize it with the current chunk's content
-            if not current_merged_chunk:
-                current_merged_chunk = chunk['content']
-                current_merged_score = chunk['score']
-                current_merged_ids.append(chunk['id'])
-                current_merged_metadata = chunk['metadata']
-                current_merged_chunk_size = chunk['metadata']['chunk_size']
-                current_merged_overlap_size = chunk['metadata']['overlap_size']
-            
-            else:
-                # Check if there is an overlap between the current merged chunk and the current chunk
-                # The overlap of each chunk can be found in the metadata: chunk['metadata'].get('overlap_size', 0)
-                overlap_size = chunk['metadata'].get('overlap_size', 0)
-                # The chunk size of each chunk can be found in the metadata: chunk['metadata'].get('chunk_size', 0)
-                chunk_size = chunk['metadata'].get('chunk_size', 0)
-                # The overlap_size and chunk_size are in number of tokens
-                # The overlap_size is the number of tokens that are repeated between the chunks
-                # The chunk_size is the total number of tokens in the chunk
-
-                # If there is an overlap, merge the chunks intelligently
-                if overlap_size > 0:
-                    # Find the position of the overlap in the current merged chunk
-                    overlap_position = current_merged_chunk.rfind(chunk['content'][:overlap_size])
-                    # Merge the chunks based on the overlap position
-                    current_merged_chunk += chunk['content'][overlap_size:]
-                    current_merged_chunk_size += chunk_size - overlap_size
-                    current_merged_overlap_size = 0
-                    current_merged_ids.append(chunk['id'])
-                    # Update the score if the current chunk has a higher score
-                    if chunk['score'] > current_merged_score:
-                        current_merged_score = chunk['score']
-                
-                else:
-                    # If there is no overlap, finalize the current merged chunk and start a new one
-                    merged_chunks.append({
-                        'id': current_merged_ids[0],
-                        'content': current_merged_chunk,
-                        'score': current_merged_score,
-                        'metadata': current_merged_metadata
-                    })
-                    current_merged_chunk = chunk['content']
-                    current_merged_score = chunk['score']
-                    current_merged_ids = [chunk['id']]
-                    current_merged_metadata = chunk['metadata']
-                    current_merged_chunk_size = chunk['metadata']['chunk_size']
-                    current_merged_overlap_size = chunk['metadata']['overlap_size']
-
         
+        # Only merge chunks if there is more than one chunk in the group
+        if len(chunks) > 1:
+            for chunk in chunks:
+            # If the chunk has an overlap, we should remove it from the content
+                chunk_overlap = chunk['metadata'].get('overlap_size', 0)
+                chunk_content = chunk['content']
+                # The overlap size is encoded using encoding = tiktoken.get_encoding("cl100k_base")
+                # Therefore we need to encode the content and then slice it
+                chunk_content = encoding.encode(chunk_content)
+                chunk_content = chunk_content[chunk_overlap:]
+                chunk_content = encoding.decode(chunk_content)
+                chunk['content'] = chunk_content
 
 
-    # Log the merged chunks for debugging
+    # Log the updated chunks after removing overlaps
     print("Merged Chunks:")
-    for chunk in merged_chunks:
-        # Show all metadata fields for each chunk and the content
-        print(f"Score: {chunk['score']} | Metadata: {chunk['metadata']}")
-        print(f"Content: {chunk['content']}")
+    for doc_id, chunks in grouped_chunks.items():
+        print(f"Document ID: {doc_id}")
+        for chunk in chunks:
+            print(f"Chunk ID: {chunk['id']} | Score: {chunk['score']} | Content: {chunk['content']}")
 
 
 
