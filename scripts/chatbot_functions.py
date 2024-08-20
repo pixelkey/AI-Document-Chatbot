@@ -57,7 +57,7 @@ def chatbot_response(input_text, context):
     combined_input = f"{context['SYSTEM_PROMPT']}\n\n"
     combined_input += "\n\n".join(
         [
-            f"Context Document {idx+1}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}\n{doc['content']}"
+            f"{idx+1}. Context Document {doc['metadata'].get('doc_id', '')} - Chunk {doc['id']} | Path: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}\n{doc['content']}"
             for idx, doc in enumerate(filtered_docs)
         ]
     )
@@ -100,7 +100,7 @@ def chatbot_response(input_text, context):
     # Construct reference list
     references = "References:\n" + "\n".join(
         [
-            f"[Chunk {doc['id']}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}]"
+            f"[Document {doc['metadata'].get('doc_id', '')} - Chunk {doc['id']}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}]"
             for doc in filtered_docs
         ]
     )

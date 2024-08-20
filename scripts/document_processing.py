@@ -212,17 +212,19 @@ def create_document_entries(doc_id, filename, filepath, chunks):
     Create document entries with unique IDs for each chunk, including file path.
     
     Args:
+        id (int): The chunk ID.
         doc_id (int): The document ID.
         filename (str): The filename of the document.
         filepath (str): The relative path of the document.
         chunks (list): The chunks of text content and their token counts.
     
     Returns:
-        list: List of document dictionaries with ID, content, filename, filepath, token count, and overlap metadata.
+        list: List of document dictionaries with chunk ID, document ID, content, filename, filepath, token count, and overlap metadata.
     """
     return [
         {
-            "id": f"{doc_id}-{chunk_idx}",
+            "id": chunk_idx,
+            "doc_id": doc_id,
             "content": chunk,
             "filename": filename,
             "filepath": filepath,
