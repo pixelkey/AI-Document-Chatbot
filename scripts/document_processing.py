@@ -1,11 +1,10 @@
-# scripts/document_processing.py
-
 import os
 import logging
 import tiktoken
 from nltk.tokenize import sent_tokenize, blankline_tokenize
 from nltk import download as nltk_download
 from dotenv import load_dotenv
+import re
 
 # Ensure that the 'punkt' tokenizer is downloaded
 nltk_download('punkt')
@@ -19,14 +18,18 @@ encoding = tiktoken.get_encoding("cl100k_base")
 
 def normalize_text(text):
     """
-    Normalize text by stripping leading/trailing whitespace and converting to lowercase.
+    Normalize text by removing excessive whitespace (more than one line).
     """
-    return text.strip().lower()
+    # Replace multiple line breaks with a single space
+    text = re.sub(r'\n\s*\n+', ' ', text.strip())
+
+    return text
 
 def chunk_text_hybrid(text, chunk_size_max):
     """
-    Split text into chunks based on paragraphs and sentences. If a paragraph
-    exceeds the chunk size, it is split further by sentences. Chunks overlap by a percentage of the chunk size.
+    Split text into chunks based on paragraphs and sentences. 
+    Retain paragraph breaks to preserve context.
+    Chunks overlap by a percentage of the chunk size.
     
     Args:
         text (str): The input text to be chunked.
@@ -60,10 +63,7 @@ def chunk_text_hybrid(text, chunk_size_max):
     if current_chunk:
         chunks.append((" ".join(current_chunk), current_chunk_size))
 
-    # Calculate overlap size as a percentage of the chunk size
     overlap_size_max = int((CHUNK_OVERLAP_PERCENTAGE / 100) * chunk_size_max)
-
-    # Add overlapping logic
     overlapped_chunks = add_chunk_overlap(chunks, chunk_size_max, overlap_size_max)
 
     return overlapped_chunks
