@@ -8,7 +8,7 @@ from vector_store_setup import setup_vector_store  # Import vector store setup
 import tiktoken  # Import tiktoken for encoding
 
 # Initialize tiktoken for token counting with cl100k_base encoding
-encoding = tiktoken.get_encoding("cl100k_base")
+token_encoding = tiktoken.get_encoding(config.TOKEN_ENCODING)
 
 def initialize_model_and_retrieval():
     """
@@ -30,7 +30,7 @@ def initialize_model_and_retrieval():
     context = {
         "client": client,
         "memory": memory,
-        "encoding": encoding,  # Ensure encoding is included
+        "encoding": token_encoding,  # Ensure encoding is included
         "embeddings": embeddings,
         "vector_store": vector_store,
         "EMBEDDING_DIM": config.EMBEDDING_DIM,

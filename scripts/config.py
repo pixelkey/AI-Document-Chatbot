@@ -25,7 +25,10 @@ env_config = {
     "TOP_SIMILARITY_RESULTS": {"default": "3", "type": int},
     "LLM_MODEL": {"default": "gpt-4o-mini", "type": str},
     "MAX_TOKENS": {"default": "128000", "type": int},
-    "CHUNK_SIZE_MAX": {"default": "512", "type": int}
+    "CHUNK_SIZE_MAX": {"default": "512", "type": int},
+    "CHUNK_OVERLAP_PERCENTAGE": {"default": "20", "type": int},
+    "TOKEN_ENCODING": {"default": "cl100k_base", "type": str},
+
 }
 
 # Reset environment variables before loading .env to ensure they are not reused

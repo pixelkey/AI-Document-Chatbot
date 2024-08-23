@@ -2,21 +2,21 @@
 
 import os
 import logging
+import config
 import tiktoken
 from nltk.tokenize import sent_tokenize, blankline_tokenize
 from nltk import download as nltk_download
 from dotenv import load_dotenv
 import re
 
-# Ensure that the 'punkt' tokenizer is downloaded
+# Ensure that the 'punkt' tokenizer is downloaded.
+# This is used for sentence and paragraph tokenization for chunking.
 nltk_download('punkt')
 
-# Load environment variables from .env file
-load_dotenv()
-CHUNK_OVERLAP_PERCENTAGE = int(os.getenv("CHUNK_OVERLAP_PERCENTAGE", 20))  # Default to 20% if not set
+CHUNK_OVERLAP_PERCENTAGE = int(config.CHUNK_OVERLAP_PERCENTAGE)
 
 # Initialize tiktoken for token counting with cl100k_base encoding
-encoding = tiktoken.get_encoding("cl100k_base")
+token_encoding = tiktoken.get_encoding(config.TOKEN_ENCODING)
 
 def normalize_text(text):
     """
@@ -46,7 +46,7 @@ def chunk_text_hybrid(text, chunk_size_max):
     current_chunk_size = 0
 
     for paragraph in paragraphs:
-        paragraph_tokens = encoding.encode(paragraph)
+        paragraph_tokens = token_encoding.encode(paragraph)
         paragraph_size = len(paragraph_tokens)
 
         if paragraph_size > chunk_size_max:
@@ -87,12 +87,12 @@ def add_chunk_overlap(chunks, chunk_size_max, overlap_size_max):
     previous_chunk_sentences = []
 
     for chunk, chunk_size in chunks:
-        current_chunk_tokens = encoding.encode(chunk)
+        current_chunk_tokens = token_encoding.encode(chunk)
 
         if previous_chunk_sentences:
             # Create the overlap text by joining previous sentences
             overlap_text = " ".join(previous_chunk_sentences)
-            overlap_tokens = encoding.encode(overlap_text)
+            overlap_tokens = token_encoding.encode(overlap_text)
             current_chunk_tokens = overlap_tokens + current_chunk_tokens
 
         # Ensure the chunk doesn't exceed the max size
@@ -100,7 +100,7 @@ def add_chunk_overlap(chunks, chunk_size_max, overlap_size_max):
             current_chunk_tokens = current_chunk_tokens[:chunk_size_max]
 
         # Decode the current chunk to text
-        current_chunk_text = encoding.decode(current_chunk_tokens)
+        current_chunk_text = token_encoding.decode(current_chunk_tokens)
 
         # Tokenize the current chunk into sentences
         sentences = sent_tokenize(current_chunk_text)
@@ -110,7 +110,7 @@ def add_chunk_overlap(chunks, chunk_size_max, overlap_size_max):
         overlap_tokens = []
         while sentences and len(overlap_tokens) < overlap_size_max:
             overlap_text = sentences.pop(-1) + " " + overlap_text
-            overlap_tokens = encoding.encode(overlap_text.strip())
+            overlap_tokens = token_encoding.encode(overlap_text.strip())
 
         overlap_size = len(overlap_tokens)  # Get the correct overlap size in tokens
 
@@ -140,7 +140,7 @@ def process_large_paragraph(
     """
     sentences = sent_tokenize(paragraph)
     for sentence in sentences:
-        sentence_tokens = encoding.encode(sentence)
+        sentence_tokens = token_encoding.encode(sentence)
         sentence_size = len(sentence_tokens)
 
         if current_chunk_size + sentence_size > chunk_size_max:
@@ -162,7 +162,7 @@ def finalize_chunk(current_chunk, chunks):
     """
     if current_chunk:
         chunk_text = " ".join(current_chunk)
-        chunk_size = len(encoding.encode(chunk_text))
+        chunk_size = len(token_encoding.encode(chunk_text))
         chunks.append((chunk_text, chunk_size))
     return [], 0
 
