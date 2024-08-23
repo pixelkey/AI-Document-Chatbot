@@ -1,3 +1,5 @@
+# scripts/chatbot_functions.py
+
 import logging
 from faiss_utils import similarity_search_with_score
 from document_processing import normalize_text
