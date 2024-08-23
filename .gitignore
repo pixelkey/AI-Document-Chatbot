@@ -39,3 +39,6 @@ ingest/*
 
 # Temporary files
 temp/*
+
+# Tokenizer files
+tokenizers/*
