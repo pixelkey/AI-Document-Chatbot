@@ -17,7 +17,9 @@ env_config = {
         "default": (
             "Please provide responses based only on the context document chunks provided if they are relevant to the user's prompt. "
             "If the context document chunks are not relevant, or if the information is not available, please let me know. "
-            "Do not provide information beyond what is available in the context documents. Note: Chunks may overlap and so may contain duplicate information."
+            "Do not provide information beyond what is available in the context documents.  "
+            "Chunks are sorted by relevancy, where the first chunk listed is the most relevant. "
+            "Note: Chunks may overlap and so may contain duplicate information."
         ),
         "type": str
     },
