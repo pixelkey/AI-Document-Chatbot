@@ -4,34 +4,48 @@ import os
 from dotenv import load_dotenv
 import logging
 
-# Delete the OPENAI_API_KEY from the OS environment in case it is set to avoid using the wrong key.
-if "OPENAI_API_KEY" in os.environ:
-    del os.environ["OPENAI_API_KEY"]
+# Environment configuration setup
+env_config = {
+    "OPENAI_API_KEY": {"default": "your-api-key-here", "type": str},
+    "EMBEDDING_MODEL": {"default": "text-embedding-3-small", "type": str},
+    "EMBEDDING_DIM": {"default": "1536", "type": int},
+    "FAISS_INDEX_PATH": {"default": "../embeddings/faiss_index.bin", "type": str},
+    "METADATA_PATH": {"default": "../embeddings/metadata.pkl", "type": str},
+    "DOCSTORE_PATH": {"default": "../embeddings/docstore.pkl", "type": str},
+    "INGEST_PATH": {"default": "../ingest", "type": str},
+    "SYSTEM_PROMPT": {
+        "default": (
+            "Please provide responses based only on the context document chunks provided if they are relevant to the user's prompt. "
+            "If the context document chunks are not relevant, or if the information is not available, please let me know. "
+            "Do not provide information beyond what is available in the context documents. Note: Chunks may overlap and so may contain duplicate information."
+        ),
+        "type": str
+    },
+    "SIMILARITY_THRESHOLD": {"default": "0.25", "type": float},
+    "TOP_SIMILARITY_RESULTS": {"default": "3", "type": int},
+    "LLM_MODEL": {"default": "gpt-4o-mini", "type": str},
+    "MAX_TOKENS": {"default": "128000", "type": int},
+    "CHUNK_SIZE_MAX": {"default": "512", "type": int}
+}
 
-# Load environment variables from .env file if it exists
+# Reset environment variables before loading .env to ensure they are not reused
+for key in env_config:
+    if key in os.environ:
+        del os.environ[key]
+
+# Load environment variables from .env file
 load_dotenv()
 
-# Configurable variables with defaults
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your-api-key-here")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", 1536))
-FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH", "../embeddings/faiss_index.bin")
-METADATA_PATH = os.getenv("METADATA_PATH", "../embeddings/metadata.pkl")
-DOCSTORE_PATH = os.getenv("DOCSTORE_PATH", "../embeddings/docstore.pkl")
-INGEST_PATH = os.getenv("INGEST_PATH", "../ingest")
-SYSTEM_PROMPT = os.getenv(
-    "SYSTEM_PROMPT",
-    "Please provide responses based only on the context documents provided if they are relevant to the user's prompt. If the context documents are not relevant, or if the information is not available, please let me know. Do not provide information beyond what is available in the context documents.",
-)
-SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", 0.25))
-TOP_SIMILARITY_RESULTS = int(os.getenv("TOP_SIMILARITY_RESULTS", 3))
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", 128000))
-CHUNK_SIZE_MAX = int(os.getenv("CHUNK_SIZE_MAX", 512))
+# Apply environment settings
+for key, settings in env_config.items():
+    value = os.getenv(key, settings["default"])
+    converted_value = settings["type"](value)
+    os.environ[key] = str(converted_value)  # Store as string in OS environment
+    globals()[key] = converted_value  # Set globally in the script
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Print environment variables for debugging
-logging.info(f"SIMILARITY_THRESHOLD: {SIMILARITY_THRESHOLD}")
-logging.info(f"TOP_SIMILARITY_RESULTS: {TOP_SIMILARITY_RESULTS}")
+# Log the settings for verification
+for key in env_config.keys():
+    logging.info(f"{key}: {globals()[key]}")
