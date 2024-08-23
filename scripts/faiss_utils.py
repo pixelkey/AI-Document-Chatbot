@@ -8,7 +8,6 @@ import numpy as np
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_community.docstore.document import Document  # Import the Document class
-from chunk_merging import intelligent_chunk_merging  # Import the merging function
 
 def save_faiss_index_metadata_and_docstore(
     faiss_index, metadata, docstore, faiss_index_path, metadata_path, docstore_path
@@ -43,33 +42,33 @@ def train_faiss_index(vector_store, training_vectors, num_clusters):
         vector_store.index.train(training_vectors)
         logging.info(f"FAISS index trained with {num_clusters} clusters.")
 
-def add_vectors_to_faiss_index(documents, vector_store, embeddings, normalize_text):
+def add_vectors_to_faiss_index(chunks, vector_store, embeddings, normalize_text):
     docstore = vector_store.docstore
     index_to_docstore_id = vector_store.index_to_docstore_id
 
-    for idx, doc in enumerate(documents):
+    for idx, doc in enumerate(chunks):
         normalized_doc = normalize_text(doc["content"])
         vectors = np.array(embeddings.embed_query(normalized_doc), dtype="float32")
 
         logging.info(
             f"Processed document chunk for embedding with vector: {vectors[:5]}..."
         )  # Show the first 5 elements of the vector for brevity
-        doc_id = idx  # Use integer ID for chunked documents
-        # Add document to vector store
-        document = Document(
+        chunk_id = idx  # Use integer ID for chunks
+        # Add chunk to vector store
+        chunk = Document(
             page_content=normalized_doc,
-            metadata={"id": doc_id, "filename": doc["filename"], "filepath": doc["filepath"]},
+            metadata={"id": chunk_id, "doc_id": doc["doc_id"], "filename": doc["filename"], "filepath": doc["filepath"], "chunk_size": doc["chunk_size"], "overlap_size": doc["overlap_size"]},
         )
         vector_store.add_texts(
-            [normalized_doc], metadatas=[document.metadata], ids=[doc_id]
+            [normalized_doc], metadatas=[chunk.metadata], ids=[chunk_id]
         )
-        docstore._dict[doc_id] = (
-            document  # Directly add Document to the in-memory dictionary
+        docstore._dict[chunk_id] = (
+            chunk  # Directly add Chunk to the in-memory dictionary
         )
-        index_to_docstore_id[doc_id] = doc_id  # Use integer ID for the docstore ID
+        index_to_docstore_id[chunk_id] = chunk_id  # Use integer ID for the docstore ID
 
         logging.info(
-            f"Added document chunk {doc_id} to vector store with normalized content."
+            f"Added chunk {chunk_id} to vector store with normalized content."
         )
 
 def similarity_search_with_score(query, vector_store, embeddings, EMBEDDING_DIM, k=100):
@@ -96,35 +95,35 @@ def similarity_search_with_score(query, vector_store, embeddings, EMBEDDING_DIM,
     for i, score in zip(I[0], D[0]):
         if i != -1:  # Ensure valid index
             try:
-                doc_id = vector_store.index_to_docstore_id.get(
+                chunk_id = vector_store.index_to_docstore_id.get(
                     i, None
                 )  # Use integer ID
-                if doc_id is None:
-                    raise KeyError(f"Document ID {i} not found in mapping.")
-                doc = vector_store.docstore.search(doc_id)
+                if chunk_id is None:
+                    raise KeyError(f"Chunk ID {i} not found in mapping.")
+                doc = vector_store.docstore.search(chunk_id)
                 results.append({
-                    "id": doc_id, 
+                    "id": chunk_id, 
                     "content": doc.page_content, 
                     "score": float(score),
                     "metadata": doc.metadata
                 })
                 logging.info(
-                    f"Matched document {doc_id} with score {score} and content: {doc.page_content[:200]}..."
+                    f"Matched chunk {chunk_id} with score {score} and content: {doc.page_content[:200]}..."
                 )  # Show first 200 characters of content for brevity
                 logging.info(
-                    f"Metadata for document {doc_id}: filename={doc.metadata.get('filename', '')}, filepath={doc.metadata.get('filepath', '')}"
+                    f"Metadata for doc {doc.metadata.get('doc_id', '')} with chunk {chunk_id}: filename={doc.metadata.get('filename', '')}, filepath={doc.metadata.get('filepath', '')}, chunk_size={doc.metadata.get('chunk_size', 0)}, overlap_size={doc.metadata.get('overlap_size', 0)}"
                 )
             except KeyError as e:
-                logging.error(f"KeyError finding document id {i}: {e}")
-                if doc_id not in vector_store.docstore._dict:
-                    logging.error(f"Document id {doc_id} not found in docstore._dict")
+                logging.error(f"KeyError finding chunk id {i}: {e}")
+                if chunk_id not in vector_store.docstore._dict:
+                    logging.error(f"Chunk id {chunk_id} not found in docstore._dict")
 
     # Log the results for debugging
-    logging.info(f"Total documents considered: {len(results)}")
+    logging.info(f"Total chunks considered: {len(results)}")
     for res in results:
-        logging.info(f"Document ID: {res['id']}, Score: {res['score']}")
+        # Log the metadata for each result
+        logging.info(f"Chunk ID: {res['id']}, Metadata: {res['metadata']}")
 
-    # Merge overlapping chunks intelligently
-    merged_chunks = intelligent_chunk_merging(results)
+        logging.info(f"Chunk ID: {res['id']}, Score: {res['score']}")
 
-    return merged_chunks
+    return results

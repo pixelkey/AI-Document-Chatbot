@@ -1,7 +1,8 @@
+# scripts/chatbot_functions.py
+
 import logging
 from faiss_utils import similarity_search_with_score
 from document_processing import normalize_text
-
 
 def chatbot_response(input_text, context):
     # Normalize input text
@@ -46,11 +47,12 @@ def chatbot_response(input_text, context):
         f"Top similarity results: {[(res['id'], res['score']) for res in unique_filtered_results[:context['TOP_SIMILARITY_RESULTS']]]}"
     )
 
+
     # Create the final combined input
     combined_input = f"{context['SYSTEM_PROMPT']}\n\n"
     combined_input += "\n\n".join(
         [
-            f"Context Document {idx+1}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}\n{doc['content']}"
+            f"{idx+1}. Context Document {doc['metadata'].get('doc_id', '')} - Chunk {doc['id']} | Path: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}\n{doc['content']}"
             for idx, doc in enumerate(filtered_docs)
         ]
     )
@@ -90,10 +92,10 @@ def chatbot_response(input_text, context):
         {"input": input_text}, {"output": response.choices[0].message.content}
     )
 
-    # Construct reference list with clickable links
+    # Construct reference list
     references = "References:\n" + "\n".join(
         [
-            f"[Chunk {doc['id']}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}]"
+            f"[Document {doc['metadata'].get('doc_id', '')} - Chunk {doc['id']}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}]"
             for doc in filtered_docs
         ]
     )
