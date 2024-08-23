@@ -21,18 +21,25 @@ def setup_gradio_interface(context):
         submit_button = gr.Button("Submit")
         clear_button = gr.Button("Clear")
 
-        # Setup event handlers
+        # Initialize session state separately for each user
+        session_state = gr.State(value=[])
+
+        # Setup event handlers with explicit state management
         submit_button.click(
-            lambda input_text: chatbot_response(input_text, context),
-            inputs=input_text,
-            outputs=[chat_history, references, input_text]
+            lambda input_text, history: chatbot_response(input_text, context, history),
+            inputs=[input_text, session_state],
+            outputs=[chat_history, references, input_text, session_state]
         )
-        clear_button.click(lambda: clear_history(context), outputs=[chat_history, references, input_text])
+        clear_button.click(
+            lambda history: clear_history(context, history),
+            inputs=[session_state],
+            outputs=[chat_history, references, input_text, session_state]
+        )
 
         input_text.submit(
-            lambda input_text: chatbot_response(input_text, context),
-            inputs=input_text,
-            outputs=[chat_history, references, input_text]
+            lambda input_text, history: chatbot_response(input_text, context, history),
+            inputs=[input_text, session_state],
+            outputs=[chat_history, references, input_text, session_state]
         )
 
         # Layout
