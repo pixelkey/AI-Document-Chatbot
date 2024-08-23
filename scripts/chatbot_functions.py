@@ -70,18 +70,13 @@ def chatbot_response(input_text, context, history):
     # Log the final content sent to the LLM
     logging.info(f"Final content sent to LLM:\n{combined_input}")
 
-    # Create the list of messages for the Chat API
-    messages = [
-        {"role": "system", "content": context["SYSTEM_PROMPT"]},
-    ]
-    for idx, doc in enumerate(filtered_docs):
-        messages.append(
-            {
-                "role": "user",
-                "content": f"Context Document {idx+1} ({doc['id']}): {doc['content']}",
-            }
-        )
-    messages.append({"role": "user", "content": f"User Prompt: {input_text}"})
+    # Include previous chat history in the conversation
+    messages = [{"role": "system", "content": context["SYSTEM_PROMPT"]}]
+    for h in history:
+        messages.append({"role": "user", "content": h})
+    
+    # Append the current input to the messages
+    messages.append({"role": "user", "content": combined_input})
 
     # Generate the LLM response
     try:
@@ -97,9 +92,8 @@ def chatbot_response(input_text, context, history):
         logging.error(f"OpenAI API error: {e}")
         return history, "Error generating response.", "", history
 
-    # Update the conversation memory in the state and context
+    # Update the conversation history with the new response
     history.append(f"User: {input_text}\nBot: {response.choices[0].message.content}")
-    context["memory"].save_context({"input": input_text}, {"output": response.choices[0].message.content})
 
     # Construct reference list
     references = "References:\n" + "\n".join(
@@ -111,6 +105,7 @@ def chatbot_response(input_text, context, history):
 
     # Return updated history, references, cleared input, and session state
     return "\n".join(history), references, "", history
+
 
 
 def clear_history(context, history):
