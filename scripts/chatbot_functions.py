@@ -4,12 +4,22 @@ import logging
 from faiss_utils import similarity_search_with_score
 from document_processing import normalize_text
 
-def chatbot_response(input_text, context):
-    # Normalize input text
+def chatbot_response(input_text, context, history):
+    """
+    Handle user input, process it, retrieve relevant documents, and generate a response.
+    Args:
+        input_text (str): The user's input.
+        context (dict): Context containing client, memory, and other settings.
+        history (list): Session state storing chat history.
+    Returns:
+        Tuple: Updated chat history, references, cleared input, and session state.
+    """
+
+    # Normalize the user's input text
     normalized_input = normalize_text(input_text)
     logging.info(f"Normalized input: {normalized_input}")
 
-    # Retrieve relevant documents with similarity scores
+    # Attempt to retrieve relevant documents using similarity search
     try:
         search_results = similarity_search_with_score(
             normalized_input, context["vector_store"], context["embeddings"], context["EMBEDDING_DIM"]
@@ -17,9 +27,9 @@ def chatbot_response(input_text, context):
         logging.info(f"Retrieved documents with scores")
     except KeyError as e:
         logging.error(f"Error while retrieving documents: {e}")
-        return context["memory"].buffer, "Error in retrieving documents.", ""
+        return history, "Error in retrieving documents.", "", history
 
-    # Filter documents based on similarity score and limit to top results with the token limit consideration
+    # Filter the results based on a similarity score threshold
     filtered_results = [
         result for result in search_results if result['score'] >= context["SIMILARITY_THRESHOLD"]
     ]
@@ -27,7 +37,7 @@ def chatbot_response(input_text, context):
         f"Filtered results by similarity threshold: {[result['score'] for result in filtered_results]}"
     )
 
-    # Remove duplicates by content
+    # Remove duplicates based on the content of the documents
     seen_contents = set()
     unique_filtered_results = []
     for result in filtered_results:
@@ -36,19 +46,18 @@ def chatbot_response(input_text, context):
             unique_filtered_results.append(result)
             seen_contents.add(content_hash)
 
-    # Sort filtered results by similarity score in descending order
+    # Sort the filtered results by similarity score in descending order
     unique_filtered_results.sort(key=lambda x: x['score'], reverse=True)
     filtered_docs = [
         result for result in unique_filtered_results[:context["TOP_SIMILARITY_RESULTS"]]
     ]
     
-    # Handle possible missing 'id' and log top similarity results
+    # Log top similarity results
     logging.info(
         f"Top similarity results: {[(res['id'], res['score']) for res in unique_filtered_results[:context['TOP_SIMILARITY_RESULTS']]]}"
     )
 
-
-    # Create the final combined input
+    # Combine content from filtered documents to form the input for the LLM
     combined_input = f"{context['SYSTEM_PROMPT']}\n\n"
     combined_input += "\n\n".join(
         [
@@ -74,6 +83,7 @@ def chatbot_response(input_text, context):
         )
     messages.append({"role": "user", "content": f"User Prompt: {input_text}"})
 
+    # Generate the LLM response
     try:
         response = context["client"].chat.completions.create(
             model=context["LLM_MODEL"],
@@ -85,12 +95,11 @@ def chatbot_response(input_text, context):
         logging.info(f"Generated LLM response successfully")
     except Exception as e:
         logging.error(f"OpenAI API error: {e}")
-        return context["memory"].buffer, "Error generating response.", ""
+        return history, "Error generating response.", "", history
 
-    # Update conversation memory
-    context["memory"].save_context(
-        {"input": input_text}, {"output": response.choices[0].message.content}
-    )
+    # Update the conversation memory in the state and context
+    history.append(f"User: {input_text}\nBot: {response.choices[0].message.content}")
+    context["memory"].save_context({"input": input_text}, {"output": response.choices[0].message.content})
 
     # Construct reference list
     references = "References:\n" + "\n".join(
@@ -100,10 +109,19 @@ def chatbot_response(input_text, context):
         ]
     )
 
-    # Return chat history, references, and clear input
-    return context["memory"].buffer, references, ""
+    # Return updated history, references, cleared input, and session state
+    return "\n".join(history), references, "", history
 
 
-def clear_history(context):
+def clear_history(context, history):
+    """
+    Clear the chat history and reset the session state.
+    Args:
+        context (dict): Context containing memory and other settings.
+        history (list): Session state to be cleared.
+    Returns:
+        Tuple: Cleared chat history, references, input field, and session state.
+    """
     context["memory"].clear()  # Clear the conversation memory
-    return "", "", ""
+    history.clear()  # Clear the history in the session state
+    return "", "", "", history
