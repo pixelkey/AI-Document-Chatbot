@@ -4,15 +4,16 @@ import os
 import faiss
 import logging
 import numpy as np
-from langchain_community.vectorstores import FAISS
-from langchain_community.docstore.in_memory import InMemoryDocstore
+from langchain.vectorstores import FAISS
+from langchain.docstore import InMemoryDocstore
 from faiss_utils import (
     save_faiss_index_metadata_and_docstore,
     load_faiss_index_metadata_and_docstore,
     train_faiss_index,
     add_vectors_to_faiss_index
 )
-from document_processing import load_documents_from_folder, normalize_text  # Import this
+from document_processing import load_documents_from_folder, normalize_text
+import config
 
 def calculate_file_paths(script_dir, faiss_index_path, metadata_path, docstore_path):
     faiss_index_path = os.path.join(script_dir, faiss_index_path)
@@ -59,7 +60,7 @@ def load_or_initialize_vector_store(
     )
     index.nprobe = 10
 
-    docstore = InMemoryDocstore()
+    docstore = InMemoryDocstore({})
     index_to_docstore_id = {}
 
     vector_store = FAISS(
@@ -72,7 +73,7 @@ def load_or_initialize_vector_store(
     training_vectors = []
     for doc in documents:
         normalized_doc = normalize_text(doc["content"])
-        vectors = embeddings.embed_query(normalized_doc)
+        vectors = embeddings.embed_documents([normalized_doc])[0]
 
         logging.info(
             f"Embedding dimension: {len(vectors)}, Config EMBEDDING_DIM: {EMBEDDING_DIM}"
@@ -84,17 +85,23 @@ def load_or_initialize_vector_store(
         training_vectors.append(vectors)
 
     training_vectors = np.array(training_vectors, dtype="float32")
+    # Normalize training vectors
+    faiss.normalize_L2(training_vectors)
 
+    # Train the FAISS index
     train_faiss_index(vector_store, training_vectors, num_clusters)
+
+    # Add vectors to FAISS index
     add_vectors_to_faiss_index(documents, vector_store, embeddings, normalize_text)
 
+    # Save the FAISS index, metadata, and docstore
     save_faiss_index_metadata_and_docstore(
         vector_store.index,
         index_to_docstore_id,
         docstore,
         faiss_index_path,
         metadata_path,
-        docstore_path,
+        docstore_path
     )
 
     logging.info(f"Document ID to Docstore Mapping: {index_to_docstore_id}")

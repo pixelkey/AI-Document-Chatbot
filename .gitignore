@@ -6,8 +6,11 @@ __pycache__/
 # Virtual environment
 venv/
 
-# Dotenv environment variable file
-.env
+# Dotenv environment variable files
+.env*
+!.env-example
+!.env-local-template
+!.env-openai-template
 
 # FAISS index, metadata, and docstore files
 *.bin

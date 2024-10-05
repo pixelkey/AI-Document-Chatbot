@@ -11,10 +11,7 @@ import re
 
 # Ensure that the 'punkt' tokenizer is downloaded.
 # This is used for sentence and paragraph tokenization for chunking.
-nltk_download('punkt')
-# This would download to the to the home directory of the user. Instead it should be saved in the project directory.
-# To do this, the download_dir parameter can be used to specify the download directory.
-nltk_download('punkt', download_dir='.')
+nltk_download('punkt_tab', download_dir='.')
 
 CHUNK_OVERLAP_PERCENTAGE = int(config.CHUNK_OVERLAP_PERCENTAGE)
 
