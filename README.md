@@ -43,6 +43,7 @@ Ensure you have a `requirements-lock.txt` file in your project directory, then r
 ```bash
 pip install -r requirements-lock.txt
 ```
+If you run into issues with the lock file, try the requirements.txt file. Check the logs for any further updates or installations that may be required.
 
 If you intend to use Ollama for local models, refer to the section "Setting up for Ollama (Local Models)" in this readme file.
 
