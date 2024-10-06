@@ -25,7 +25,7 @@ cd support-chatbot
 
 ### 2. Create a virtual environment using Python 3.11.8
 ```bash
-python3.11 -m venv venv
+python3.11.8 -m venv venv
 ```
 
 ### 3. Activate the virtual environment
