@@ -67,13 +67,20 @@ def chatbot_response(input_text, context, history):
     # Build the conversation history
     conversation_history = "\n".join(history)
 
+    prompt = f"{context['SYSTEM_PROMPT']}\n\n"
+
+    if conversation_history:
+        prompt += f"Conversation History:\n{conversation_history}\n\n"
+
+    prompt += f"Context Documents:\n{context_documents}\n\nUser Prompt:\n{input_text}"
+
+
+
     # Build the final prompt to be sent to the LLM
     if config.MODEL_SOURCE == "openai":
+
         # For OpenAI client, use messages
-        messages = [{"role": "system", "content": context["SYSTEM_PROMPT"]}]
-        if conversation_history:
-            messages.append({"role": "assistant", "content": conversation_history})
-        messages.append({"role": "user", "content": input_text})
+        messages = [{"role": "system", "content": prompt}]
 
         # Log the messages being sent
         logging.info(f"Messages sent to OpenAI API: {messages}")
@@ -95,13 +102,6 @@ def chatbot_response(input_text, context, history):
             return history, "Error generating response.", "", history
 
     elif config.MODEL_SOURCE == "local":
-        # For local model client, build a prompt that includes the system prompt, conversation history, and user input
-        prompt = f"{context['SYSTEM_PROMPT']}\n\n"
-
-        if conversation_history:
-            prompt += f"Conversation History:\n{conversation_history}\n\n"
-
-        prompt += f"Context Documents:\n{context_documents}\n\nUser Prompt:\n{input_text}"
 
         # Log the final prompt sent to the LLM
         logging.info(f"Final prompt sent to local LLM:\n{prompt}")
