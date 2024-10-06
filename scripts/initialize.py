@@ -2,8 +2,6 @@
 
 import config  # Import the config file
 from langchain.memory import ConversationBufferMemory
-from langchain_openai import OpenAIEmbeddings  # Replace with actual OpenAIEmbeddings
-from openai import OpenAI  # Import the OpenAI client
 from vector_store_setup import setup_vector_store  # Import vector store setup
 import tiktoken  # Import tiktoken for encoding
 
@@ -16,12 +14,23 @@ def initialize_model_and_retrieval():
     Returns:
         dict: Context dictionary with initialized components.
     """
-    # Initialize the OpenAI client and embeddings
-    client = OpenAI(api_key=config.OPENAI_API_KEY)
-    embeddings = OpenAIEmbeddings(api_key=config.OPENAI_API_KEY)
-
     # Initialize memory for conversation
     memory = ConversationBufferMemory()
+
+    if config.MODEL_SOURCE == "openai":
+        # Initialize OpenAI client and embeddings
+        from openai import OpenAI
+        from langchain.embeddings import OpenAIEmbeddings
+        client = OpenAI(api_key=config.OPENAI_API_KEY)
+        embeddings = OpenAIEmbeddings(api_key=config.OPENAI_API_KEY)
+    elif config.MODEL_SOURCE == "local":
+        # Initialize local model client and embeddings
+        from langchain_community.llms import Ollama
+        from langchain_community.embeddings import OllamaEmbeddings
+        client = Ollama(model=config.LLM_MODEL)
+        embeddings = OllamaEmbeddings(model=config.EMBEDDING_MODEL)
+    else:
+        raise ValueError("Invalid MODEL_SOURCE in config.")
 
     # Setup vector store
     vector_store = setup_vector_store(embeddings)
@@ -30,14 +39,15 @@ def initialize_model_and_retrieval():
     context = {
         "client": client,
         "memory": memory,
-        "encoding": token_encoding,  # Ensure encoding is included
+        "encoding": token_encoding,
         "embeddings": embeddings,
         "vector_store": vector_store,
         "EMBEDDING_DIM": config.EMBEDDING_DIM,
         "SYSTEM_PROMPT": config.SYSTEM_PROMPT,
         "LLM_MODEL": config.LLM_MODEL,
-        "MAX_TOKENS": config.MAX_TOKENS,
+        "LLM_MAX_TOKENS": config.LLM_MAX_TOKENS,
         "SIMILARITY_THRESHOLD": config.SIMILARITY_THRESHOLD,
         "TOP_SIMILARITY_RESULTS": config.TOP_SIMILARITY_RESULTS,
+        "MODEL_SOURCE": config.MODEL_SOURCE,
     }
     return context

@@ -7,3 +7,4 @@ faiss-cpu==1.8.0.post1
 tiktoken==0.7.0
 python-dotenv==1.0.1
 nltk==3.8.1
+ollama==0.3.3
