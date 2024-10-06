@@ -44,20 +44,15 @@ Ensure you have a `requirements-lock.txt` file in your project directory, then r
 pip install -r requirements-lock.txt
 ```
 
+If you intend to use Ollama for local models, refer to the section "Setting up for Ollama (Local Models)" in this readme file.
+
 ### 5. Set up environment variables
-Create a `.env` file in the project directory with the following content:
-```
-OPENAI_API_KEY=your-openai-api-key
-EMBEDDING_DIM=1536
-FAISS_INDEX_PATH=../embeddings/faiss_index.bin
-METADATA_PATH=../embeddings/metadata.pkl
-DOCSTORE_PATH=../embeddings/docstore.pkl
-INGEST_PATH=../ingest
-SYSTEM_PROMPT=Please only provide responses based on the information provided. If it is not available, please let me know.
-SIMILARITY_THRESHOLD=0.25
-TOP_SIMILARITY_RESULTS=3
-```
-Replace `your-openai-api-key` with your actual OpenAI API key.
+Create a `.env` file in the project directory by selecting a .env template.
+- .env-local-template
+- .env-openai-template
+
+Rename the template file to ".env"
+If using OpenAI models, replace `your-openai-api-key` with your actual OpenAI API key.
 
 ### 6. Prepare the ingest folder
 Make sure the `INGEST_PATH` directory specified in the `.env` file exists and contains documents with a `.txt` extension.
@@ -80,6 +75,7 @@ Find this line: Running on local URL:  http://127.0.0.1:7860
 ## Configuration Options
 The `.env` file contains several configuration options:
 
+- **MODEL_SOURCE**: "openai" for GPT models, "local" for Ollama
 - **OPENAI_API_KEY:** Your OpenAI API key for accessing OpenAI services.
 - **EMBEDDING_DIM:** The dimension of the embeddings used by OpenAI.
 - **FAISS_INDEX_PATH:** Path to the FAISS index file.
@@ -89,6 +85,29 @@ The `.env` file contains several configuration options:
 - **SYSTEM_PROMPT:** The system prompt used by the chatbot to generate responses.
 - **SIMILARITY_THRESHOLD:** Threshold for document similarity; documents with a similarity score below this value will be ignored.
 - **TOP_SIMILARITY_RESULTS:** The number of top similar results to be considered for generating responses.
+
+
+## Setting up for Ollama (Local Models)
+### Requirements:
+- Ensure Ollama is installed on your local machine. Ollama provides local models for embedding and LLM purposes.
+- You will need the ollama CLI tool to invoke local models.
+
+#### 1. Install Ollama
+Refer to the Ollama installation guide.
+
+#### 2. Download and Set Up Local Models
+Ensure you have the local LLM and embedding models have been downloaded via Ollama and set up as per Ollama's instructions.
+
+Example to download LLM and Embedding models. Then display the list for your reference:
+```
+ollama pull nomic-embed-text:latest
+ollama pull mistral:7b
+ollama list
+```
+#### 3. Modify the .env file
+- Rename .env-local-template to .env
+- Ensure MODEL_SOURCE=local in the .env file.
+
 
 ## License
 This project is licensed under the Apache License, Version 2.0. See the [LICENSE](LICENSE) file for more details.

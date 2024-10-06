@@ -22,7 +22,7 @@ def setup_vector_store(embeddings):
 
     # Initialize or load the FAISS index and associated components
     vector_store, _ = load_or_initialize_vector_store(
-        embeddings, ingest_path, config.CHUNK_SIZE_MAX, config.EMBEDDING_DIM, 
+        embeddings, ingest_path, config.CHUNK_SIZE_MAX, config.EMBEDDING_DIM,
         faiss_index_path, metadata_path, docstore_path
     )
 
