@@ -49,15 +49,16 @@ def chatbot_response(input_text, context_documents, context, history):
     # Generate the response based on the model source
     response_text = generate_response(input_text, context_documents, context, history)
     if response_text is None:
-        return history, "Error generating response.", ""
+        return "\n".join([f"{u}\n{b}" for u, b in history]), "Error generating response.", ""
 
-    # Update the conversation history with the new exchange
-    history.append(f"User: {input_text}\nBot: {response_text}")
+    # Append the new user input and response to the history as a tuple
+    history.append((f"User: {input_text}", f"Bot: {response_text}"))
 
-    # Return updated history, LLM response, and cleared input
-    return "\n".join(history), response_text, ""
+    # Format the history with horizontal line separators for better readability
+    formatted_history = "\n---\n".join([f"{u}\n{b}" for u, b in history])
 
-
+    # Return the formatted chat history, the latest response, and a cleared input field
+    return formatted_history, response_text, ""
 
 def retrieve_relevant_documents(normalized_input, context):
     """
@@ -144,26 +145,16 @@ def generate_openai_response(input_text, context_documents, context, history):
     """
     Generate response using OpenAI API.
     """
-    messages = []
-
-    # System prompt
-    messages.append({"role": "system", "content": context['SYSTEM_PROMPT']})
+    messages = [{"role": "system", "content": context['SYSTEM_PROMPT']}]
 
     # Add context documents as a system message
     messages.append({"role": "system", "content": f"Context Documents:\n{context_documents}"})
 
-    # Add conversation history
+    # Add conversation history as user-assistant pairs
     if history:
-        for exchange in history:
-            if "\nBot: " in exchange:
-                user_part, bot_part = exchange.split("\nBot: ")
-                user_text = user_part.replace("User: ", "")
-                bot_text = bot_part
-                messages.append({"role": "user", "content": user_text})
-                messages.append({"role": "assistant", "content": bot_text})
-            else:
-                # Handle cases where the exchange doesn't split as expected
-                messages.append({"role": "user", "content": exchange})
+        for user_msg, bot_msg in history:
+            messages.append({"role": "user", "content": user_msg.replace("User: ", "")})
+            messages.append({"role": "assistant", "content": bot_msg.replace("Bot: ", "")})
 
     # Add the current user input
     messages.append({"role": "user", "content": input_text})
@@ -171,29 +162,14 @@ def generate_openai_response(input_text, context_documents, context, history):
     # Log the messages being sent
     logging.info(f"Messages sent to OpenAI API: {messages}")
 
-    # Calculate max tokens
-    try:
-        tokens_consumed = len(context["encoding"].encode(str(messages)))
-        max_tokens = min(
-            context["LLM_MAX_TOKENS"] - tokens_consumed, 8000
-        )
-    except Exception as e:
-        logging.warning(f"Token encoding error: {e}")
-        max_tokens = 8000  # Fallback to default max tokens
-
     # Generate the LLM response
-    try:
-        response = context["client"].chat.completions.create(
-            model=context["LLM_MODEL"],
-            messages=messages,
-            max_tokens=max_tokens,
-        )
-        # Extract the response content
-        response_text = response.choices[0].message.content
-        logging.info("Generated LLM response successfully.")
-    except Exception as e:
-        logging.error(f"Error generating response: {e}")
-        return None
+    response = context["client"].chat.completions.create(
+        model=context["LLM_MODEL"],
+        messages=messages,
+        max_tokens=min(context["LLM_MAX_TOKENS"] - len(context["encoding"].encode(str(messages))), 8000),
+    )
+    response_text = response.choices[0].message.content
+    logging.info("Generated LLM response successfully.")
 
     return response_text
 
@@ -238,14 +214,12 @@ def build_local_prompt(system_prompt, history, context_documents, input_text):
 
     if history:
         prompt += "Conversation History:\n"
-        for exchange in history:
-            prompt += f"{exchange}\n"
+        for user_msg, bot_msg in history:
+            prompt += f"{user_msg}\n{bot_msg}\n"
         prompt += "\n"
 
     prompt += f"Context Documents:\n{context_documents}\n\nUser Prompt:\n{input_text}"
     return prompt
-
-
 
 def clear_history(context, history):
     """
@@ -264,4 +238,3 @@ def clear_history(context, history):
     history.clear()  # Clear the history in the session state
     
     return "", "", "", history
-
