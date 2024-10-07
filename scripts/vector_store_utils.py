@@ -88,7 +88,7 @@ def load_or_initialize_vector_store(
         )
         assert (
             len(vectors) == EMBEDDING_DIM
-        ), f"Embedding dimension {len(vectors)} does not match expected {EMBEDDING_DIM} for doc: {doc_sample}"
+        ), f"Embedding dimension {len(vectors)} does not match expected {EMBEDDING_DIM} for doc: {doc_id}"
 
         training_vectors.append(vectors)
 
