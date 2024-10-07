@@ -74,13 +74,14 @@ def load_or_initialize_vector_store(
     for doc in documents:
         normalized_doc = normalize_text(doc["content"])
         vectors = embeddings.embed_documents([normalized_doc])[0]
+        doc_sample = doc["content"][:50]
 
         logging.info(
-            f"Embedding dimension: {len(vectors)}, Config EMBEDDING_DIM: {EMBEDDING_DIM}"
+            f"Embedding dimension: {len(vectors)}, Config EMBEDDING_DIM: {EMBEDDING_DIM} for doc: {doc_sample}"
         )
         assert (
             len(vectors) == EMBEDDING_DIM
-        ), f"Embedding dimension {len(vectors)} does not match expected {EMBEDDING_DIM}"
+        ), f"Embedding dimension {len(vectors)} does not match expected {EMBEDDING_DIM} for doc: {doc_sample}"
 
         training_vectors.append(vectors)
 

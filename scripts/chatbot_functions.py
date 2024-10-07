@@ -5,17 +5,15 @@ from faiss_utils import similarity_search_with_score
 from document_processing import normalize_text
 import config
 
-def chatbot_response(input_text, context, history):
+def retrieve_and_format_references(input_text, context):
     """
-    Handle user input, process it, retrieve relevant documents, and generate a response.
+    Retrieve relevant documents and format references.
     Args:
         input_text (str): The user's input.
         context (dict): Context containing client, memory, and other settings.
-        history (list): Session state storing chat history.
     Returns:
-        Tuple: Updated chat history, references, cleared input, and session state.
+        Tuple: references, filtered_docs, and context_documents.
     """
-
     # Normalize the user's input text
     normalized_input = normalize_text(input_text)
     logging.info(f"Normalized input: {normalized_input}")
@@ -23,24 +21,43 @@ def chatbot_response(input_text, context, history):
     # Retrieve relevant documents
     filtered_docs = retrieve_relevant_documents(normalized_input, context)
     if not filtered_docs:
-        return history, "No relevant documents found.", "", history
+        return "No relevant documents found.", None, None
 
-    # Build the context documents
+    # Construct the references
+    references = build_references(filtered_docs)
+
+    # Build the context documents for LLM prompt
     context_documents = build_context_documents(filtered_docs)
+
+    return references, filtered_docs, context_documents
+
+def chatbot_response(input_text, context_documents, context, history):
+    """
+    Handle user input, generate a response, and update the conversation history.
+    Args:
+        input_text (str): The user's input.
+        context_documents (str): The context documents for the LLM.
+        context (dict): Context containing client, memory, and other settings.
+        history (list): Session state storing chat history.
+    Returns:
+        Tuple: Updated chat history, LLM response, and cleared input.
+    """
+    # Ensure that history is treated as a list
+    if not isinstance(history, list):
+        history = []
 
     # Generate the response based on the model source
     response_text = generate_response(input_text, context_documents, context, history)
     if response_text is None:
-        return history, "Error generating response.", "", history
+        return history, "Error generating response.", ""
 
     # Update the conversation history with the new exchange
     history.append(f"User: {input_text}\nBot: {response_text}")
 
-    # Construct reference list
-    references = build_references(filtered_docs)
+    # Return updated history, LLM response, and cleared input
+    return "\n".join(history), response_text, ""
 
-    # Return updated history, references, cleared input, and session state
-    return "\n".join(history), references, "", history
+
 
 def retrieve_relevant_documents(normalized_input, context):
     """
@@ -101,7 +118,7 @@ def build_references(filtered_docs):
     """
     references = "References:\n" + "\n".join(
         [
-            f"[Document {doc['metadata'].get('doc_id', '')} - Chunk {doc['id']}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}]"
+            f"[Document {doc['metadata'].get('doc_id', '')} - Chunk {doc['id']}: {doc['metadata'].get('filepath', '')}/{doc['metadata'].get('filename', '')}]\n{doc['content']}\n"
             for doc in filtered_docs
         ]
     )
@@ -228,6 +245,8 @@ def build_local_prompt(system_prompt, history, context_documents, input_text):
     prompt += f"Context Documents:\n{context_documents}\n\nUser Prompt:\n{input_text}"
     return prompt
 
+
+
 def clear_history(context, history):
     """
     Clear the chat history and reset the session state.
@@ -235,8 +254,14 @@ def clear_history(context, history):
         context (dict): Context containing memory and other settings.
         history (list): Session state to be cleared.
     Returns:
-        Tuple: Cleared chat history, references, input field, and session state.
+        Tuple: Cleared chat history, cleared references, cleared input field, and session state.
     """
+    # Ensure history is treated as a list before clearing
+    if not isinstance(history, list):
+        history = []
+
     context["memory"].clear()  # Clear the conversation memory
     history.clear()  # Clear the history in the session state
+    
     return "", "", "", history
+
