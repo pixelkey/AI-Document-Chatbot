@@ -75,12 +75,20 @@ def load_or_initialize_vector_store(
         normalized_doc = normalize_text(doc["content"])
         vectors = embeddings.embed_documents([normalized_doc])[0]
 
+        # These will be logged for each document
+        doc_id = doc["doc_id"]
+        chunk_id = doc["id"]
+        chunk_size = doc["chunk_size"]
+        overlap_size= doc["overlap_size"]
+        doc_file = doc["filepath"] + "/" + doc["filename"]
+
+        # Log the embedding information
         logging.info(
-            f"Embedding dimension: {len(vectors)}, Config EMBEDDING_DIM: {EMBEDDING_DIM}"
+            f"Embedding for doc_id: {doc_id}, chunk_id: {chunk_id}, chunk_size: {chunk_size}, overlap_size: {overlap_size}, doc_file: {doc_file}"
         )
         assert (
             len(vectors) == EMBEDDING_DIM
-        ), f"Embedding dimension {len(vectors)} does not match expected {EMBEDDING_DIM}"
+        ), f"Embedding dimension {len(vectors)} does not match expected {EMBEDDING_DIM} for doc: {doc_id}"
 
         training_vectors.append(vectors)
 
