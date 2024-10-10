@@ -1,4 +1,4 @@
-# scripts/chatbot.py
+# scripts/main.py
 
 from initialize import initialize_model_and_retrieval
 from interface import setup_gradio_interface
